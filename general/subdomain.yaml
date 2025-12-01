@@ -66,4 +66,4 @@ steps:
 
 post_run:
   # delete all files in workspaces folder except a file lists in report section
-  - Cleaning("{{Output}}/subdomain/")
+  #- Cleaning("{{Output}}/subdomain/")

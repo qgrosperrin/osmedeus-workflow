@@ -14,6 +14,7 @@ params:
   - alimit: "10000"
   - archiveThreads: "{{ threads / 2 }}"
   - overviewThreads: "{{ threads * 5 }}"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"  
 
 # {{Output}} == {{Workspaces}} + {{Workspace}} but strip "/" char
 pre_run:
