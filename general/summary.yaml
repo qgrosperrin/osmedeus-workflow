@@ -3,4 +3,5 @@ desc: Run all the clean up script and generate summary report
 
 steps:
   - scripts:
+    - Compress('{{Output}}/{{Workspace}}.tar.gz', '{{Output}}')
     - GenMarkdownReport("{{Data}}/markdown/general-template.md", "{{Output}}/summary.html")
