@@ -6,15 +6,17 @@ report:
     - "{{Output}}/fingerprint/{{Workspace}}-technologies.txt"
     - "{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt"
     - "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
+    - "{{Output}}/fingerprint/{{Workspace}}-ntlm-found.txt"
 
 params:
-  - diffHttpFile: "{{Output}}/probing/diffhttp-{{Workspace}}.txt"
-  - finThreads: "{{ threads }}"
-  - overviewThreads: "{{ threads * 5}}"
-  - httpTimeout: "10"
-  - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
-  - overviewJsonFile: "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
-  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  diffHttpFile: "{{Output}}/probing/diffhttp-{{Workspace}}.txt"
+  finThreads: "{{ threads }}"
+  overviewThreads: "{{ threads * 5}}"
+  httpTimeout: "10"
+  httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
+  overviewJsonFile: "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
+  defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  ntlmDictFile: "{{Data}}/wordlists/ntlm-paths.dict"
 
 pre_run:
   - CreateFolder("{{Output}}/fingerprint")
@@ -34,9 +36,17 @@ steps:
       - Cat("{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt")
       - "Printf('==> The raw result can be found at: {{overviewJsonFile}}')"
 
+  - required:
+      - "{{Binaries}}/httpx"
+      - "{{httpFile}}"
+    commands:
+      - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -path {{ntlmDictFile}} -H 'Authorization: NTLM TlRMTVNTUAABAAAAB4IIAAAAAAAAAAAAAAAAAAAAAAA=' -ms 'NTLM' -follow-host-redirects >> {{Output}}/fingerprint/{{Workspace}}-ntlm-found.txt"
+    scripts:
+      - "Printf('==> NTLM Endpoints found: {{Output}}/fingerprint/{{Workspace}}-ntlm-found.txt')"
+
   # in case we mess up this module
   - conditions:
-    - FileLength('{{diffHttpFile}}') <= 0
+      - FileLength('{{diffHttpFile}}') <= 0
     commands:
       - "cp {{httpFile}} {{diffHttpFile}}"
 
