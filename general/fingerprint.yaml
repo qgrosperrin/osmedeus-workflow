@@ -10,14 +10,14 @@ report:
     - "{{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
 
 params:
-  diffHttpFile: "{{Output}}/probing/diffhttp-{{Workspace}}.txt"
-  finThreads: "{{ threads }}"
-  overviewThreads: "{{ threads * 5}}"
-  httpTimeout: "10"
-  httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
-  overviewJsonFile: "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
-  defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-  ntlmDictFile: "{{Data}}/wordlists/ntlm-paths.dict"
+  - diffHttpFile: "{{Output}}/probing/diffhttp-{{Workspace}}.txt"
+  - finThreads: "{{ threads }}"
+  - overviewThreads: "{{ threads * 5}}"
+  - httpTimeout: "10"
+  - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
+  - overviewJsonFile: "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  - ntlmDictFile: "{{Data}}/wordlists/ntlm-paths.dict"
 
 pre_run:
   - CreateFolder("{{Output}}/fingerprint")

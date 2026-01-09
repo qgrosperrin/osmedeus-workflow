@@ -13,6 +13,7 @@ params:
   - subdomainFile: "{{Output}}/subdomain/final-{{Workspace}}.txt"
   - dnsThreads: "100"
   - recordTypes: "-mx -txt"
+  - providerConfig: "{{Data}}/external-configs/dnsx-providers.yaml"
 
 steps:
   - required:
@@ -20,4 +21,4 @@ steps:
     
     commands:
       - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -no-color -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt"
-      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -no-color -o {{Output}}/dns/dns-asn-{{Workspace}}.txt"
+      - set -a && source {{providerConfig}} && set +a && cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -no-color -o {{Output}}/dns/dns-asn-{{Workspace}}.txt
