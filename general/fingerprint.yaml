@@ -6,7 +6,8 @@ report:
     - "{{Output}}/fingerprint/{{Workspace}}-technologies.txt"
     - "{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt"
     - "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
-    - "{{Output}}/fingerprint/{{Workspace}}-ntlm-found.txt"
+    - "{{Output}}/fingerprint/{{Workspace}}-ntlm-found.json"
+    - "{{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
 
 params:
   diffHttpFile: "{{Output}}/probing/diffhttp-{{Workspace}}.txt"
@@ -22,6 +23,7 @@ pre_run:
   - CreateFolder("{{Output}}/fingerprint")
 
 steps:
+  # 1. Standard HTTP Fingerprinting
   - required:
       - "{{Binaries}}/httpx"
       - "{{httpFile}}"
@@ -29,22 +31,34 @@ steps:
       - cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -title -favicon -hash sha256 -jarm -tech-detect -status-code -cdn -tls-grab -ztls -vhost -follow-host-redirects -include-chain >> {{overviewJsonFile}}
     scripts:
       - ExecCmd("echo 'URL, Title, Tech, Response Hash' > {{Output}}/fingerprint/{{Workspace}}-raw-overview.txt")
-      # only get the different HTTP response
       - ExecCmd("{{overviewJsonFile}} | {{Binaries}}/json-cleaner -f 'hash.body_sha256,words,lines' > {{diffHttpFile}}")
       - CleanJSONHttpx('{{overviewJsonFile}}', '{{Output}}/fingerprint/{{Workspace}}-raw-overview.txt')
       - BeautifyCSV('{{Output}}/fingerprint/{{Workspace}}-raw-overview.txt', '{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt')
       - Cat("{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt")
       - "Printf('==> The raw result can be found at: {{overviewJsonFile}}')"
 
+  # 2. NTLM Discovery (HTTPX -> JSON)
   - required:
       - "{{Binaries}}/httpx"
       - "{{httpFile}}"
     commands:
-      - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -path {{ntlmDictFile}} -H 'Authorization: NTLM TlRMTVNTUAABAAAAB4IIAAAAAAAAAAAAAAAAAAAAAAA=' -ms 'NTLM' -follow-host-redirects >> {{Output}}/fingerprint/{{Workspace}}-ntlm-found.txt"
+      - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -path {{ntlmDictFile}} -H 'Authorization: NTLM TlRMTVNTUAABAAAAB4IIAAAAAAAAAAAAAAAAAAAAAAA=' -ms 'NTLM' -follow-host-redirects -o {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json"
     scripts:
-      - "Printf('==> NTLM Endpoints found: {{Output}}/fingerprint/{{Workspace}}-ntlm-found.txt')"
+      - "Printf('==> NTLM Endpoints found (JSON): {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json')"
 
-  # in case we mess up this module
+  # 3. NTLM Information Extraction (Strict JQ + Nmap)
+  - conditions:
+      - FileLength('{{Output}}/fingerprint/{{Workspace}}-ntlm-found.json') > 0
+    required:
+      - "{{Binaries}}/nmap"
+      - "jq"
+    commands:
+      # DIRECT PARSING: Uses .port and .host directly from JSON. Path is stripped from .url regex.
+      - "cat {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sh >> {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
+    scripts:
+      - "Printf('==> Nmap NTLM Info saved to: {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt')"
+
+  # 4. Fallback
   - conditions:
       - FileLength('{{diffHttpFile}}') <= 0
     commands:
