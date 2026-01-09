@@ -12,6 +12,8 @@ routines:
   - modules:
       - subdomain
   - modules:
+      - dns
+  - modules:
       - probing
   - modules:
       - fingerprint

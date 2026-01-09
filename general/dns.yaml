@@ -1,0 +1,23 @@
+name: dns
+desc: Scanning for DNS records and ASN information
+
+report:
+  final:
+    - "{{Output}}/dns/dns-records-{{Workspace}}.txt"
+    - "{{Output}}/dns/dns-asn-{{Workspace}}.txt"
+
+pre_run:
+  - CreateFolder("{{Output}}/dns/")
+
+params:
+  - subdomainFile: "{{Output}}/subdomain/final-{{Workspace}}.txt"
+  - dnsThreads: "100"
+  - recordTypes: "-mx -txt"
+
+steps:
+  - required:
+      - "{{Binaries}}/dnsx"
+    
+    commands:
+      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt"
+      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -o {{Output}}/dns/dns-asn-{{Workspace}}.txt"
