@@ -19,5 +19,5 @@ steps:
       - "{{Binaries}}/dnsx"
     
     commands:
-      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt"
-      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -o {{Output}}/dns/dns-asn-{{Workspace}}.txt"
+      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -no-color -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt"
+      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -no-color -o {{Output}}/dns/dns-asn-{{Workspace}}.txt"
