@@ -10,6 +10,7 @@ params:
   - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
   - archiveFile: "{{Output}}/archive/{{Workspace}}-archive.txt"
   - overviewArchiveJsonFile: "{{Output}}/archive/{{Workspace}}-overview-archive.txt"
+  - urlfinderConfig: "{{Data}}/external-configs/urlfinder-providers.yaml"
   - archiveTimeout: "1h"
   - alimit: "10000"
   - archiveThreads: "{{ threads / 2 }}"
@@ -22,9 +23,9 @@ pre_run:
 
 steps:
   - required:
-      - "{{Binaries}}/katana"
+      - "{{Binaries}}/urlfinder"
     commands:
-      - "timeout -k 1m {{archiveTimeout}} {{Binaries}}/katana -silent -no-color -c {{archiveThreads}} -passive -f qurl -u {{Target}} | {{Binaries}}/durl | shuf -n {{alimit}} >> {{archiveFile}}"
+      - "timeout -k 1m {{archiveTimeout}} {{Binaries}}/urlfinder -d {{Target}} -config {{urlfinderConfig}} -silent -all | {{Binaries}}/durl | shuf -n {{alimit}} >> {{archiveFile}}"
     scripts:
       - "SortU('{{archiveFile}}')"
   
@@ -43,4 +44,3 @@ steps:
 
 post_run:
   - TotalArchive('{{archiveFile}}')
-
