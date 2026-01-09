@@ -100,7 +100,7 @@ steps:
   - required:
       - "{{Binaries}}/httprobe"
     commands:
-      - "cat {{rawDnsFile}} {{finalSubdomainFile}} | sort -u | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -t {{httpThreads}} >> {{httpFile}}"
+      - "cat {{rawDnsFile}} {{finalSubdomainFile}} | sort -u | {{Binaries}}/httpx -H '{{defaultUA}}' -ports http:medium -silent -t {{httpThreads}} >> {{httpFile}}"
     scripts:
       - "SortU('{{httpFile}}')"
       - "ExecCmd('rm -rf {{rawDnsFile}} {{customDnsWordlist}} {{permDomainFile}}')"
