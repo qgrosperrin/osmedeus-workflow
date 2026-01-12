@@ -28,10 +28,10 @@ steps:
       - "{{Binaries}}/httpx"
       - "{{httpFile}}"
     commands:
-      - cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -title -favicon -hash sha256 -jarm -tech-detect -status-code -cdn -tls-grab -ztls -vhost -follow-host-redirects -include-chain >> {{overviewJsonFile}}
+      - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -title -favicon -hash sha256 -jarm -tech-detect -status-code -cdn -tls-grab -ztls -vhost -follow-host-redirects -include-chain >> {{overviewJsonFile}}"
     scripts:
       - ExecCmd("echo 'URL, Title, Tech, Response Hash' > {{Output}}/fingerprint/{{Workspace}}-raw-overview.txt")
-      - ExecCmd("{{overviewJsonFile}} | {{Binaries}}/json-cleaner -f 'hash.body_sha256,words,lines' > {{diffHttpFile}}")
+      - ExecCmd("cat {{overviewJsonFile}} | {{Binaries}}/json-cleaner -f 'hash.body_sha256,words,lines' > {{diffHttpFile}}")
       - CleanJSONHttpx('{{overviewJsonFile}}', '{{Output}}/fingerprint/{{Workspace}}-raw-overview.txt')
       - BeautifyCSV('{{Output}}/fingerprint/{{Workspace}}-raw-overview.txt', '{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt')
       - Cat("{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt")
@@ -42,6 +42,7 @@ steps:
       - "{{Binaries}}/httpx"
       - "{{httpFile}}"
     commands:
+      # Single-line syntax with standard quotes
       - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -path {{ntlmDictFile}} -H 'Authorization: NTLM TlRMTVNTUAABAAAAB4IIAAAAAAAAAAAAAAAAAAAAAAA=' -ms 'NTLM' -follow-host-redirects -o {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json"
     scripts:
       - "Printf('==> NTLM Endpoints found (JSON): {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json')"
@@ -53,9 +54,12 @@ steps:
       - "{{Binaries}}/nmap"
       - "jq"
     commands:
-      # DIRECT PARSING: Uses .port and .host directly from JSON. Path is stripped from .url regex.
-      - "cat {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sh >> {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
+      - "cat {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sort -u > {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh"
+      - "chmod +x {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh"
+      - "{{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh >> {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
+      
     scripts:
+      - "Printf('==> Generated Nmap script: {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh')"
       - "Printf('==> Nmap NTLM Info saved to: {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt')"
 
   # 4. Fallback
