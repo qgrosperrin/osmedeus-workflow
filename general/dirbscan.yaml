@@ -33,7 +33,7 @@ steps:
     source: "{{httpFile}}"
     threads: '{{dirbThreads}}'
     commands:
-      - "timeout -k 1m {{ffTimeout}} {{Binaries}}/ffuf -s -t {{ffThreads}} -noninteractive -ac -acs advanced -timeout 15 -se -D -fc '429,404,400' -e 'asp,aspx,aspx~,asp~,py,py~,rb,rb~,php,php~,bak,bkp,cache,cgi,conf,csv,html,inc,js,json,jsp,jsp~,log,old,txt' -json -H '{{defaultUA}}' -ac -s -fc '429,404,400' -json -u '[[.line]]/FUZZ' -w {{wordlists}}:FUZZ > {{Output}}/directory/raw-[[._id_]].json 2>/dev/null"
+      - "timeout -k 1m {{ffTimeout}} {{Binaries}}/ffuf -silent -t {{ffThreads}} -noninteractive -ac -acs advanced -timeout 15 -se -D -fc '429,404,400' -e 'asp,aspx,aspx~,asp~,py,py~,rb,rb~,php,php~,bak,bkp,cache,cgi,conf,csv,html,inc,js,json,jsp,jsp~,log,old,txt' -json -H '{{defaultUA}}' -u '[[.line]]/FUZZ' -w {{wordlists}}:FUZZ > {{Output}}/directory/raw-[[._id_]].json 2>/dev/null"
   - scripts:
       - ExecCmd("cat {{Output}}/directory/raw-*.json | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/directory/beautify-{{Workspace}}.csv")
       # doing cleaning for the dirb result

@@ -42,6 +42,19 @@ steps:
     scripts:
       - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx -silent -nf -no-color -title -t {{httpThreads}} -H '{{defaultUA}}' --store-response-dir {{httpResponse}} ")
       - ExecCmd("trufflehog --concurrency={{trufflehogThreads}} filesystem {{httpResponse}} > {{Output}}/linkfinding/trufflehog-{{Workspace}}-output.txt 2>&1")
+  
+  - label: "Getting JSON response for better display"
+    scripts:
+      - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx ffuf -silent -t {{httpThreads}} -noninteractive -ac -acs advanced -timeout 15 -se -D -fc '429,404,400' -H '{{defaultUA}}' -json > {{Output}}/linkfinding/raw-[[._id_]].json 2>/dev/null")
+      - ExecCmd("cat {{Output}}/linkfinding/raw-*.json | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/linkfinding/beautify-{{Workspace}}.csv")
+      - ExecCmd("cat {{Output}}/linkfinding/raw-*.json | {{Binaries}}/json-cleaner -f status,words,lines | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv")
+      - ExecCmd("rm -rf {{Output}}/linkfinding/raw-*.json")
+      # beautify the result
+      - ExecCmd("cat {{Output}}/linkfinding/beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4,5,6 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/beautify-{{Workspace}}.txt")
+      - ExecCmd("cat {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4,5,6 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
+      - Cat("{{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
+      - "Printf('==> The unfiltered result can be found at: {{Output}}/linkfinding/beautify-{{Workspace}}.txt')"
+
 
   # Print the file if there is not too much data
   - conditions:
