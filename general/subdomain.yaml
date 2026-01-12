@@ -15,7 +15,7 @@ pre_run:
 params:
   - subfinderThreads: "{{threads * 6}}"
   - amassTimeout: "2h"
-  - enableAmass: "false"
+  - enableAmass: "true"
   - amassThreads: "200"
   - amassConfig: "{{Data}}/external-configs/amass-basic-config.yaml"
   - subfinderConfig: "{{Data}}/external-configs/subfinder-provider.yaml"
