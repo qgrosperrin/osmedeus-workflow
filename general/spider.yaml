@@ -38,23 +38,18 @@ steps:
     commands:
       - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u  >> {{linkFile}}"
 
-  - label: "Getting raw response & scanning for secrets with trufflehog"
+  - label: "Analyzing responses and scanning for secrets"
     scripts:
-      - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx -silent -nf -no-color -title -t {{httpThreads}} -H '{{defaultUA}}' --store-response-dir {{httpResponse}} ")
+      - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx -silent -t {{httpThreads}} -H '{{defaultUA}}' --store-response-dir {{httpResponse}} -sc -cl -location -title -json > {{Output}}/linkfinding/raw-links.json")
       - ExecCmd("trufflehog --concurrency={{trufflehogThreads}} filesystem {{httpResponse}} > {{Output}}/linkfinding/trufflehog-{{Workspace}}-output.txt 2>&1")
-  
-  - label: "Getting JSON response for better display"
-    scripts:
-      - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx ffuf -silent -t {{httpThreads}} -noninteractive -ac -acs advanced -timeout 15 -se -D -fc '429,404,400' -H '{{defaultUA}}' -json > {{Output}}/linkfinding/raw-[[._id_]].json 2>/dev/null")
-      - ExecCmd("cat {{Output}}/linkfinding/raw-*.json | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/linkfinding/beautify-{{Workspace}}.csv")
-      - ExecCmd("cat {{Output}}/linkfinding/raw-*.json | {{Binaries}}/json-cleaner -f status,words,lines | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv")
-      - ExecCmd("rm -rf {{Output}}/linkfinding/raw-*.json")
-      # beautify the result
-      - ExecCmd("cat {{Output}}/linkfinding/beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4,5,6 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/beautify-{{Workspace}}.txt")
-      - ExecCmd("cat {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4,5,6 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
+      - ExecCmd("cat {{Output}}/linkfinding/raw-links.json | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/beautify-{{Workspace}}.csv")
+      - ExecCmd("cat {{Output}}/linkfinding/raw-links.json | {{Binaries}}/json-cleaner -f status_code,content_length | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv")
+      - ExecCmd("rm -rf {{Output}}/linkfinding/raw-links.json")
+      # 6. Beautify
+      - ExecCmd("cat {{Output}}/linkfinding/beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/beautify-{{Workspace}}.txt")
+      - ExecCmd("cat {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
       - Cat("{{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
       - "Printf('==> The unfiltered result can be found at: {{Output}}/linkfinding/beautify-{{Workspace}}.txt')"
-
 
   # Print the file if there is not too much data
   - conditions:
