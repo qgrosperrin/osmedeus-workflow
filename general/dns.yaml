@@ -14,7 +14,7 @@ params:
   - subdomainFile: "{{Output}}/subdomain/final-{{Workspace}}.txt"
   - dnsThreads: "100"
   - recordTypes: "-mx -txt"
-  - providerConfig: "{{Data}}/external-configs/dnsx-providers.yaml"
+  - providerConfig: "{{Data}}/external-configs/projectdiscovery-provider.yaml"
 
 steps:
   - required:
