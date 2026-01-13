@@ -24,4 +24,4 @@ steps:
     commands:
       - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -no-color -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt"
       - "set -a && source {{providerConfig}} && set +a && cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -no-color -o {{Output}}/dns/dns-asn-{{Workspace}}.txt"
-      - "grep -oE 'AS[0-9]+' {{Output}}/dns/dns-asn-{{Workspace}}.txt | sort -u | while read asn; do echo $asn; whois $asn | grep -iE '^(descr|org-name|org:|netname|country):' | head -n 10; sleep 3; done >> {{Output}}/dns/asn-whois-details-{{Workspace}}.txt"
+      - "grep -oE 'AS[0-9]+' {{Output}}/dns/dns-asn-{{Workspace}}.txt | sort -u | while read asn; do echo $asn; whois $asn | grep -iE '^(as-name|asname|org-name|orgname|org:|netname|country):' | head -n 10; echo '---'; sleep 3; done >> {{Output}}/dns/asn-whois-details-{{Workspace}}.txt"
