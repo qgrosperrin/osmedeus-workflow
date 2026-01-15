@@ -52,7 +52,6 @@ steps:
       - FileLength('{{Output}}/fingerprint/{{Workspace}}-ntlm-found.json') > 0
     required:
       - "{{Binaries}}/nmap"
-      - "jq"
     commands:
       - "cat {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sort -u > {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh"
       - "chmod +x {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh"
