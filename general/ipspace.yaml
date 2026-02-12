@@ -32,7 +32,7 @@ steps:
 
   # join results
   - scripts:
-      - Append("{{Output}}/ipspace/{{Workspace}}-ipspace.txt", "{{Output}}/ipspace/{{Workspace}}-range.txt")
+      #- Append("{{Output}}/ipspace/{{Workspace}}-ipspace.txt", "{{Output}}/ipspace/{{Workspace}}-range.txt")
       - Append("{{Output}}/ipspace/{{Workspace}}-ipspace.txt", "{{ipFile}}")
       - SortU("{{Output}}/ipspace/{{Workspace}}-ipspace.txt")
 
