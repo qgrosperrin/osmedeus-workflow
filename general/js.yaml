@@ -7,7 +7,9 @@ report:
     - "{{Output}}/js/endpoints-{{Workspace}}.txt"
     - "{{Output}}/js/secrets-{{Workspace}}.txt"
     - "{{Output}}/js/semgrep-{{Workspace}}.json"
+    - "{{Output}}/js/semgrep-{{Workspace}}.txt"
     - "{{Output}}/js/retirejs-{{Workspace}}.json"
+    - "{{Output}}/js/retirejs-{{Workspace}}.txt"
     - "{{Output}}/js/trufflehog-{{Workspace}}.txt"
     - "{{Output}}/js/nuclei-js-{{Workspace}}.txt"
 
@@ -103,7 +105,8 @@ steps:
     commands:
       - "semgrep --config p/javascript --config p/secrets --config p/owasp-top-ten --json --quiet {{jsResponseDir}} > {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null || true"
     scripts:
-      - Printf("==> Semgrep findings: {{Output}}/js/semgrep-{{Workspace}}.json")
+      - ExecCmd("jq -r '.results[] | [.check_id, .path, (.start.line|tostring), .extra.message] | join(\" | \")' {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null | sort -u > {{Output}}/js/semgrep-{{Workspace}}.txt || true")
+      - Printf("==> Semgrep findings: {{Output}}/js/semgrep-{{Workspace}}.txt")
 
   # 5. retire.js - Detect known-vulnerable JS libraries (CVE database)
   - label: "Detecting vulnerable JS libraries with retire.js"
@@ -112,7 +115,8 @@ steps:
     commands:
       - "retire --js --jspath {{jsResponseDir}} --outputformat json --outputpath {{Output}}/js/retirejs-{{Workspace}}.json --nocache 2>/dev/null || true"
     scripts:
-      - Printf("==> Retire.js findings: {{Output}}/js/retirejs-{{Workspace}}.json")
+      - ExecCmd("jq -r '.[] | .file as $f | .results[] | .component as $c | .version as $v | .vulnerabilities[]? | [$c, $v, .severity, (.identifiers.CVE // [\"no-cve\"])[0], $f] | join(\" | \")' {{Output}}/js/retirejs-{{Workspace}}.json 2>/dev/null | sort -u > {{Output}}/js/retirejs-{{Workspace}}.txt || true")
+      - Printf("==> Retire.js findings: {{Output}}/js/retirejs-{{Workspace}}.txt")
 
   # 6. trufflehog - Deep entropy-based secret scanning over downloaded JS files
   - label: "Deep secret scanning with trufflehog"
