@@ -1,0 +1,146 @@
+name: js
+desc: Automated JavaScript analysis - discovery, endpoint/secret extraction, SAST, vulnerable library detection and nuclei vuln checks
+
+report:
+  final:
+    - "{{Output}}/js/js-urls-{{Workspace}}.txt"
+    - "{{Output}}/js/endpoints-{{Workspace}}.txt"
+    - "{{Output}}/js/secrets-{{Workspace}}.txt"
+    - "{{Output}}/js/semgrep-{{Workspace}}.json"
+    - "{{Output}}/js/retirejs-{{Workspace}}.json"
+    - "{{Output}}/js/trufflehog-{{Workspace}}.txt"
+    - "{{Output}}/js/nuclei-js-{{Workspace}}.txt"
+
+params:
+  - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
+  - spiderLinkFile: "{{Output}}/linkfinding/links-{{Workspace}}.txt"
+  - jsUrlFile: "{{Output}}/js/js-urls-{{Workspace}}.txt"
+  - jsResponseDir: "{{Output}}/js/files/"
+  - jsLimit: "5000"
+  - subjsThreads: "{{ threads * 4 }}"
+  - jsluiceThreads: "{{ threads * 2 }}"
+  - httpThreads: "{{ threads * 10 }}"
+  - nucleiThreads: "{{ threads * 10 }}"
+  - nucleiTimeout: "4h"
+  - trufflehogThreads: "{{ threads * 6 }}"
+  - skipJsAnalysis: "false"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+
+pre_run:
+  - CreateFolder("{{Output}}/js")
+  - CreateFolder("{{Output}}/js/files")
+
+steps:
+  # 0. Guard clause - allow skipping the entire module
+  - conditions:
+      - '"{{skipJsAnalysis}}" == "true"'
+    scripts:
+      - ErrPrintf("Filter", "Skipping JS analysis")
+      - Exit(1)
+
+  # 1a. JS URL Discovery: filter .js URLs from spider.yaml's katana output (no re-crawl)
+  - label: "Filtering JS URLs from spider crawl output"
+    required:
+      - "{{spiderLinkFile}}"
+    commands:
+      - "grep -iE '\\.js(\\?|$)' {{spiderLinkFile}} | sort -u >> {{jsUrlFile}}"
+    scripts:
+      - Printf("==> JS URLs from spider crawl: {{jsUrlFile}}")
+
+  # 1b. JS URL Discovery: subjs (passive - extracts <script src> tags from HTML, complementary to katana)
+  - label: "Discovering additional JS URLs via subjs"
+    required:
+      - "{{Binaries}}/subjs"
+      - "{{httpFile}}"
+    commands:
+      - "cat {{httpFile}} | {{Binaries}}/subjs -c {{subjsThreads}} | sort -u >> {{jsUrlFile}}"
+    scripts:
+      - SortU("{{jsUrlFile}}")
+      - Printf("==> JS URLs collected: {{jsUrlFile}}")
+
+  # Guard: skip if no JS URLs found
+  - conditions:
+      - "FileLength('{{jsUrlFile}}') <= 0"
+    scripts:
+      - ErrPrintf("Filter", "No JS URLs found, skipping JS analysis")
+      - Exit(1)
+
+  # Guard: truncate if too many JS URLs to avoid overload
+  - conditions:
+      - "FileLength('{{jsUrlFile}}') > {{jsLimit}}"
+    scripts:
+      - Warnf("JS URL file exceeds limit {{jsLimit}}. Truncating to avoid overload.")
+      - ExecCmd("head -n {{jsLimit}} {{jsUrlFile}} > {{jsUrlFile}}.tmp && mv {{jsUrlFile}}.tmp {{jsUrlFile}}")
+
+  # 2. Download JS files to disk for static analysis
+  - label: "Downloading JS files for static analysis"
+    required:
+      - "{{Binaries}}/httpx"
+      - "{{jsUrlFile}}"
+    commands:
+      - "cat {{jsUrlFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -t {{httpThreads}} -store-response-dir {{jsResponseDir}} -mc 200 > /dev/null 2>&1"
+    scripts:
+      - Printf("==> JS files stored at: {{jsResponseDir}}")
+
+  # 3. jsluice - AST-based endpoint and secret extraction (most accurate, replaces LinkFinder + SecretFinder)
+  - label: "Extracting endpoints and secrets with jsluice"
+    required:
+      - "{{Binaries}}/jsluice"
+    commands:
+      - "find {{jsResponseDir}} -type f | xargs -P {{jsluiceThreads}} -I{} {{Binaries}}/jsluice urls {} 2>/dev/null | jq -r '.url // empty' | sort -u >> {{Output}}/js/endpoints-{{Workspace}}.txt"
+      - "find {{jsResponseDir}} -type f | xargs -P {{jsluiceThreads}} -I{} {{Binaries}}/jsluice secrets {} 2>/dev/null >> {{Output}}/js/secrets-raw-{{Workspace}}.json"
+    scripts:
+      - ExecCmd("cat {{Output}}/js/secrets-raw-{{Workspace}}.json | jq -r '[.kind, .data.match] | join(\": \")' 2>/dev/null | sort -u >> {{Output}}/js/secrets-{{Workspace}}.txt")
+      - SortU("{{Output}}/js/endpoints-{{Workspace}}.txt")
+      - SortU("{{Output}}/js/secrets-{{Workspace}}.txt")
+      - Printf("==> Endpoints: {{Output}}/js/endpoints-{{Workspace}}.txt")
+      - Printf("==> Secrets: {{Output}}/js/secrets-{{Workspace}}.txt")
+
+  # 4. semgrep - Static Application Security Testing on JS files
+  - label: "Running semgrep SAST on JS files"
+    required:
+      - "semgrep"
+    commands:
+      - "semgrep --config p/javascript --config p/secrets --config p/owasp-top-ten --json --quiet {{jsResponseDir}} > {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null || true"
+    scripts:
+      - Printf("==> Semgrep findings: {{Output}}/js/semgrep-{{Workspace}}.json")
+
+  # 5. retire.js - Detect known-vulnerable JS libraries (CVE database)
+  - label: "Detecting vulnerable JS libraries with retire.js"
+    required:
+      - "retire"
+    commands:
+      - "retire --js --jspath {{jsResponseDir}} --outputformat json --outputpath {{Output}}/js/retirejs-{{Workspace}}.json --nocache 2>/dev/null || true"
+    scripts:
+      - Printf("==> Retire.js findings: {{Output}}/js/retirejs-{{Workspace}}.json")
+
+  # 6. trufflehog - Deep entropy-based secret scanning over downloaded JS files
+  - label: "Deep secret scanning with trufflehog"
+    commands:
+      - "trufflehog --concurrency={{trufflehogThreads}} filesystem {{jsResponseDir}} > {{Output}}/js/trufflehog-{{Workspace}}.txt 2>&1"
+    scripts:
+      - Printf("==> Trufflehog output: {{Output}}/js/trufflehog-{{Workspace}}.txt")
+
+  # 7. nuclei - JS-specific vulnerability and exposure templates (run against live JS URLs)
+  - label: "Running nuclei JS vulnerability templates"
+    required:
+      - "{{Binaries}}/nuclei"
+      - "{{jsUrlFile}}"
+    scripts:
+      - "ExecCmd(\"timeout -k 1m {{nucleiTimeout}} {{Binaries}}/nuclei -H '{{defaultUA}}' -silent -c {{nucleiThreads}} -jsonl -t ~/nuclei-templates/http/exposures/ -t ~/nuclei-templates/http/technologies/ -l {{jsUrlFile}} -o {{Output}}/js/nuclei-js-{{Workspace}}.json 2>/dev/null\")"
+    pconditions:
+      - "FileLength('{{Output}}/js/nuclei-js-{{Workspace}}.json') > 0"
+    pscripts:
+      - ExecCmd("cat {{Output}}/js/nuclei-js-{{Workspace}}.json | jq -r '[.info.severity,.\"template-id\",.\"matched-at\"] | join(\" - \")' > {{Output}}/js/nuclei-js-{{Workspace}}.txt")
+      - SortU("{{Output}}/js/nuclei-js-{{Workspace}}.txt")
+      - TeleMessByFile("#sensitive", "{{Output}}/js/nuclei-js-{{Workspace}}.txt")
+      - Cat("{{Output}}/js/nuclei-js-{{Workspace}}.txt")
+      - Printf("==> Nuclei JS findings: {{Output}}/js/nuclei-js-{{Workspace}}.txt")
+
+  # Summary
+  - scripts:
+      - Cat("{{Output}}/js/endpoints-{{Workspace}}.txt")
+      - Printf("==> JS Analysis complete. All results in {{Output}}/js/")
+
+post_run:
+  - GenMarkdownReport("{{Data}}/markdown/general-template.md", "{{Output}}/summary.html")

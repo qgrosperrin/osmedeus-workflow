@@ -1,0 +1,30 @@
+# IDEX
+.superpowers-src/
+.roo/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Node (if any tooling is added later)
+node_modules/
+
+# Workflow builder temp files
+*.json.bak

@@ -22,6 +22,8 @@ routines:
   - modules:
       - spider
   - modules:
+      - js
+  - modules:
       - sto
       - archive
       - ipspace
