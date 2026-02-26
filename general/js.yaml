@@ -33,7 +33,6 @@ pre_run:
   - CreateFolder("{{Output}}/js/files")
 
 steps:
-  # 0. Guard clause - allow skipping the entire module
   - conditions:
       - '"{{skipJsAnalysis}}" == "true"'
     scripts:

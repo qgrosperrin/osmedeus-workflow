@@ -37,7 +37,7 @@ params:
 steps:
   # check if we already scan before
   - conditions:
-      - "FileLength('{{dnsFile}}') > 1"
+      - "FileLength('{{dnsFile}}') > 0"
     commands:
       - cp {{dnsFile}} {{Output}}/probing/bak-dns-{{Workspace}}.txt
       - cp {{httpFile}} {{Output}}/probing/bak-http-{{Workspace}}.txt
@@ -124,14 +124,14 @@ steps:
   ### Checking if we have new HTTP or DNS results
   # generate new dns 
   - conditions:
-      - "FileLength('{{Output}}/probing/bak-dns-{{Workspace}}.txt') > 1"
+      - "FileLength('{{Output}}/probing/bak-dns-{{Workspace}}.txt') > 0"
     scripts:
       - ExecCmd("cat {{dnsFile}} | anew {{Output}}/probing/bak-dns-{{Workspace}}.txt > {{Output}}/probing/new-dns-{{Workspace}}.txt")
       - SortU("{{Output}}/probing/new-dns-{{Workspace}}.txt")
       - "Printf('New DNS detected: {{Output}}/probing/new-dns-{{Workspace}}.txt')"
   # generate new http 
   - conditions:
-      - "FileLength('{{Output}}/probing/bak-http-{{Workspace}}.txt') > 1"
+      - "FileLength('{{Output}}/probing/bak-http-{{Workspace}}.txt') > 0"
     scripts:
       - ExecCmd("cat {{httpFile}} | anew {{Output}}/probing/bak-http-{{Workspace}}.txt > {{Output}}/probing/new-http-{{Workspace}}.txt")
       - SortU("{{Output}}/probing/new-http-{{Workspace}}.txt")
