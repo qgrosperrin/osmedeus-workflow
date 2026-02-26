@@ -19,6 +19,8 @@ params:
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
   - trufflehogThreads: "{{ threads * 6}}"
   - httpThreads: "{{ threads * 10}}"
+  - dirbFile: "{{Output}}/directory/beautify-{{Workspace}}.csv"
+  - dirbSpiderFile: "{{Output}}/linkfinding/dirbscan-urls-{{Workspace}}.txt"
 
 pre_run:
   - CreateFolder("{{Output}}/linkfinding")
@@ -37,6 +39,25 @@ steps:
     threads: '{{spiderPrallel}}'
     commands:
       - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u  >> {{linkFile}}"
+
+  # 1b. Extract URLs discovered by dirbscan for targeted spidering
+  - label: "Preparing dirbscan-discovered URLs for spidering"
+    conditions:
+      - "FileLength('{{dirbFile}}') > 0"
+    scripts:
+      - ExecCmd("cut -d',' -f1 {{dirbFile}} | grep -v '^$' | sort -u > {{dirbSpiderFile}}")
+      - "Printf('==> Dirbscan URLs prepared for spidering: {{dirbSpiderFile}}')"
+
+  # 1c. Spider from dirbscan-discovered paths (more targeted than root-only crawl)
+  - label: "Spidering from dirbscan-discovered paths"
+    conditions:
+      - "FileLength('{{dirbSpiderFile}}') > 0"
+    required:
+      - "{{Binaries}}/katana"
+    source: "{{dirbSpiderFile}}"
+    threads: '{{spiderPrallel}}'
+    commands:
+      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u >> {{linkFile}}"
 
   - label: "Analyzing responses and scanning for secrets"
     scripts:

@@ -20,6 +20,8 @@ routines:
   - modules:
       - screenshot
   - modules:
+      - dirbscan
+  - modules:
       - spider
   - modules:
       - js
@@ -29,8 +31,6 @@ routines:
       - ipspace
   - modules:
       - vulnscan
-  - modules:
-      - dirbscan
   - modules:
       - portscan
   - modules:
