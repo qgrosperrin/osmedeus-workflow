@@ -21,7 +21,7 @@ steps:
       - "{{Binaries}}/httpx"
       - "{{diffHttpFile}}"
     commands: 
-      - "cat {{diffHttpFile}} | {{Binaries}}/httpx -t {{screenThreads}} -no-color -silent -screenshot -screenshot-timeout {{screenTimeout}} -json -store-response-dir {{Output}}/screenshot/{{Workspace}}-screenshots/ > /dev/null 2>&1"
+      - "cat {{diffHttpFile}} | jq -r '.url' | {{Binaries}}/httpx -t {{screenThreads}} -no-color -silent -screenshot -screenshot-timeout {{screenTimeout}} -json -store-response-dir {{Output}}/screenshot/{{Workspace}}-screenshots/ > /dev/null 2>&1"
     scripts:
       - ExecCmd("mv {{Output}}/screenshot/{{Workspace}}-screenshots/screenshot.html {{Output}}/screenshot/{{Workspace}}-screenshots/screenshot-{{Workspace}}.html")
       - ExecCmd("ls {{Output}}/screenshot/ > {{Output}}/screenshot/number-of-screenshot.txt")
