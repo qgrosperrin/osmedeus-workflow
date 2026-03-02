@@ -1,0 +1,43 @@
+name: ntlm
+desc: discover and extract NTLM authentication endpoints
+
+report:
+  final:
+    - "{{Output}}/ntlm/{{Workspace}}-ntlm-found.json"
+    - "{{Output}}/ntlm/{{Workspace}}-ntlm-info.txt"
+
+params:
+  - overviewThreads: "{{ threads * 5}}"
+  - httpTimeout: "10"
+  - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  - ntlmDictFile: "{{Data}}/wordlists/ntlm-paths.dict"
+
+pre_run:
+  - CreateFolder("{{Output}}/ntlm")
+
+steps:
+  # 1. NTLM Discovery (HTTPX -> JSON)
+  - required:
+      - "{{Binaries}}/httpx"
+      - "{{httpFile}}"
+    commands:
+      - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -path {{ntlmDictFile}} -H 'Authorization: NTLM TlRMTVNTUAABAAAAB4IIAAAAAAAAAAAAAAAAAAAAAAA=' -ms 'NTLM' -follow-host-redirects -o {{Output}}/ntlm/{{Workspace}}-ntlm-found.json"
+    scripts:
+      - "Printf('==> NTLM Endpoints found (JSON): {{Output}}/ntlm/{{Workspace}}-ntlm-found.json')"
+
+  # 2. NTLM Information Extraction (Strict JQ + Nmap)
+  - conditions:
+      - FileLength('{{Output}}/ntlm/{{Workspace}}-ntlm-found.json') > 0
+    required:
+      - "{{Binaries}}/nmap"
+    commands:
+      - "cat {{Output}}/ntlm/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sort -u > {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh"
+      - "chmod +x {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh"
+      - "{{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh >> {{Output}}/ntlm/{{Workspace}}-ntlm-info.txt"
+    scripts:
+      - "Printf('==> Generated Nmap script: {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh')"
+      - "Printf('==> Nmap NTLM Info saved to: {{Output}}/ntlm/{{Workspace}}-ntlm-info.txt')"
+
+post_run:
+  - GenMarkdownReport("{{Data}}/markdown/general-template.md", "{{Output}}/summary.html")

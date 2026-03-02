@@ -6,8 +6,6 @@ report:
     - "{{Output}}/fingerprint/{{Workspace}}-technologies.txt"
     - "{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt"
     - "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
-    - "{{Output}}/fingerprint/{{Workspace}}-ntlm-found.json"
-    - "{{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
 
 params:
   - diffHttpFile: "{{Output}}/probing/diffhttp-{{Workspace}}.txt"
@@ -17,7 +15,6 @@ params:
   - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
   - overviewJsonFile: "{{Output}}/fingerprint/{{Workspace}}-http-overview.txt"
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-  - ntlmDictFile: "{{Data}}/wordlists/ntlm-paths.dict"
 
 pre_run:
   - CreateFolder("{{Output}}/fingerprint")
@@ -37,31 +34,7 @@ steps:
       - Cat("{{Output}}/fingerprint/beautify-{{Workspace}}-http.txt")
       - "Printf('==> The raw result can be found at: {{overviewJsonFile}}')"
 
-  # 2. NTLM Discovery (HTTPX -> JSON)
-  - required:
-      - "{{Binaries}}/httpx"
-      - "{{httpFile}}"
-    commands:
-      # Single-line syntax with standard quotes
-      - "cat {{httpFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -json -path {{ntlmDictFile}} -H 'Authorization: NTLM TlRMTVNTUAABAAAAB4IIAAAAAAAAAAAAAAAAAAAAAAA=' -ms 'NTLM' -follow-host-redirects -o {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json"
-    scripts:
-      - "Printf('==> NTLM Endpoints found (JSON): {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json')"
-
-  # 3. NTLM Information Extraction (Strict JQ + Nmap)
-  - conditions:
-      - FileLength('{{Output}}/fingerprint/{{Workspace}}-ntlm-found.json') > 0
-    required:
-      - "{{Binaries}}/nmap"
-    commands:
-      - "cat {{Output}}/fingerprint/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sort -u > {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh"
-      - "chmod +x {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh"
-      - "{{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh >> {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt"
-      
-    scripts:
-      - "Printf('==> Generated Nmap script: {{Output}}/fingerprint/{{Workspace}}-ntlm-exec.sh')"
-      - "Printf('==> Nmap NTLM Info saved to: {{Output}}/fingerprint/{{Workspace}}-ntlm-info.txt')"
-
-  # 4. Fallback
+  # 2. Fallback
   - conditions:
       - FileLength('{{diffHttpFile}}') <= 0
     commands:

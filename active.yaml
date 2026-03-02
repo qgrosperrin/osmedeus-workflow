@@ -1,0 +1,24 @@
+name: active
+desc: Running "active" reconnaissance activities
+type: general
+validator: domain
+
+usage: |
+    osmedeus scan -f active -t target.com
+
+routines:
+  - modules:
+      - ntlm
+  - modules:
+      - dirbscan
+  - modules:
+      - spider
+  - modules:
+      - js
+  - modules:
+      - vulnscan
+  - modules:
+      - portscan
+  - modules:
+      - summary
+

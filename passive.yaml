@@ -1,0 +1,26 @@
+name: passive
+desc: Running "passive" reconnaissance activities
+type: general
+validator: domain
+
+usage: |
+    osmedeus scan -f passive -t target.com
+
+routines:
+  - modules:
+      - subdomain
+  - modules:
+      - dns
+  - modules:
+      - probing
+  - modules:
+      - fingerprint
+  - modules:
+      - screenshot
+  - modules:
+      - sto
+      - archive
+      - ipspace
+  - modules:
+      - summary
+
