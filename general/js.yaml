@@ -11,6 +11,7 @@ report:
     - "{{Output}}/js/retirejs-{{Workspace}}.json"
     - "{{Output}}/js/retirejs-{{Workspace}}.txt"
     - "{{Output}}/js/trufflehog-{{Workspace}}.txt"
+    - "{{Output}}/js/titus-{{Workspace}}.txt"
     - "{{Output}}/js/nuclei-js-{{Workspace}}.txt"
 
 params:
@@ -123,6 +124,15 @@ steps:
       - "trufflehog --concurrency={{trufflehogThreads}} filesystem {{jsResponseDir}} > {{Output}}/js/trufflehog-{{Workspace}}.txt 2>&1"
     scripts:
       - "Printf('==> Trufflehog output: {{Output}}/js/trufflehog-{{Workspace}}.txt')"
+
+  # 6b. titus - High-performance secret scanning with 459 rules + binary extraction over downloaded JS files
+  - label: "Secret scanning with titus"
+    required:
+      - "{{Binaries}}/titus"
+    commands:
+      - "{{Binaries}}/titus scan {{jsResponseDir}}; {{Binaries}}/titus report > {{Output}}/js/titus-{{Workspace}}.txt"
+    scripts:
+      - "Printf('==> Titus output: {{Output}}/js/titus-{{Workspace}}.txt')"
 
   # 7. nuclei - JS-specific vulnerability and exposure templates (run against live JS URLs)
   - label: "Running nuclei JS vulnerability templates"
