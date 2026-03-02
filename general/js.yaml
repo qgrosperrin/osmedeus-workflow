@@ -13,6 +13,7 @@ report:
     - "{{Output}}/js/trufflehog-{{Workspace}}.txt"
     - "{{Output}}/js/titus-{{Workspace}}.txt"
     - "{{Output}}/js/nuclei-js-{{Workspace}}.txt"
+    - "{{Output}}/js/fingerprint-{{Workspace}}.txt"
 
 params:
   - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
@@ -28,6 +29,8 @@ params:
   - trufflehogThreads: "{{ threads * 6 }}"
   - skipJsAnalysis: "false"
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  - httpTimeout: "10"
+  - overviewThreads: "{{ threads * 5 }}"
 
 pre_run:
   - CreateFolder("{{Output}}/js")
@@ -149,6 +152,16 @@ steps:
       - TeleMessByFile("#sensitive", "{{Output}}/js/nuclei-js-{{Workspace}}.txt")
       - Cat("{{Output}}/js/nuclei-js-{{Workspace}}.txt")
       - "Printf('==> Nuclei JS findings: {{Output}}/js/nuclei-js-{{Workspace}}.txt')"
+
+  # 8. Fingerprint discovered endpoints
+  - label: "Fingerprinting discovered endpoints"
+    required:
+      - "{{Binaries}}/httpx"
+      - "{{Output}}/js/endpoints-{{Workspace}}.txt"
+    commands:
+      - "cat {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt"
+    scripts:
+      - "Printf('==> Endpoint Fingerprints: {{Output}}/js/fingerprint-{{Workspace}}.txt')"
 
   # Summary
   - scripts:
