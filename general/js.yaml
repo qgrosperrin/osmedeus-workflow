@@ -157,9 +157,14 @@ steps:
   - label: "Fingerprinting discovered endpoints"
     required:
       - "{{Binaries}}/httpx"
+      - "{{Binaries}}/unfurl"
       - "{{Output}}/js/endpoints-{{Workspace}}.txt"
     commands:
-      - "cat {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt"
+      - "cat {{jsUrlFile}} | {{Binaries}}/unfurl format %d > {{Output}}/js/domains-{{Workspace}}.txt"
+      - "cat {{jsUrlFile}} | {{Binaries}}/unfurl format %r.%t >> {{Output}}/js/domains-{{Workspace}}.txt"
+      - "sort -u {{Output}}/js/domains-{{Workspace}}.txt -o {{Output}}/js/domains-{{Workspace}}.txt"
+      - "awk 'NF{print \"//\"$0; print \".\"$0}' {{Output}}/js/domains-{{Workspace}}.txt > {{Output}}/js/domains-regex-{{Workspace}}.txt"
+      - "cat {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' | grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt"
     scripts:
       - "Printf('==> Endpoint Fingerprints: {{Output}}/js/fingerprint-{{Workspace}}.txt')"
 
