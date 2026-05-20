@@ -160,11 +160,12 @@ steps:
       - "{{Binaries}}/unfurl"
       - "{{Output}}/js/endpoints-{{Workspace}}.txt"
     commands:
-      - "cat {{jsUrlFile}} | {{Binaries}}/unfurl format %d > {{Output}}/js/domains-{{Workspace}}.txt"
-      - "cat {{jsUrlFile}} | {{Binaries}}/unfurl format %r.%t >> {{Output}}/js/domains-{{Workspace}}.txt"
-      - "sort -u {{Output}}/js/domains-{{Workspace}}.txt -o {{Output}}/js/domains-{{Workspace}}.txt"
-      - "awk 'NF{print \"//\"$0; print \".\"$0}' {{Output}}/js/domains-{{Workspace}}.txt > {{Output}}/js/domains-regex-{{Workspace}}.txt"
-      - "cat {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' | grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt"
+      - "cat {{httpFile}} {{jsUrlFile}} 2>/dev/null | {{Binaries}}/unfurl format %d 2>/dev/null | grep . | sort -u > {{Output}}/js/domains-{{Workspace}}.txt"
+      - "sed 's|^|//|; s|$|/|' {{Output}}/js/domains-{{Workspace}}.txt > {{Output}}/js/domains-regex-{{Workspace}}.txt"
+      - "sed 's|^|//|; s|$|:|' {{Output}}/js/domains-{{Workspace}}.txt >> {{Output}}/js/domains-regex-{{Workspace}}.txt"
+      - "grep -E '^https?://' {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' > {{Output}}/js/endpoints-abs-{{Workspace}}.txt || true"
+      - "if [ -s {{Output}}/js/domains-regex-{{Workspace}}.txt ]; then grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt {{Output}}/js/endpoints-abs-{{Workspace}}.txt > {{Output}}/js/endpoints-inscope-{{Workspace}}.txt || true; else echo '[js] domains-regex file empty, fingerprinting all absolute endpoints'; cp {{Output}}/js/endpoints-abs-{{Workspace}}.txt {{Output}}/js/endpoints-inscope-{{Workspace}}.txt; fi"
+      - "cat {{Output}}/js/endpoints-inscope-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt"
     scripts:
       - "Printf('==> Endpoint Fingerprints: {{Output}}/js/fingerprint-{{Workspace}}.txt')"
 
