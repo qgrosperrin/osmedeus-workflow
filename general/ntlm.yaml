@@ -33,9 +33,9 @@ steps:
       - "{{Binaries}}/nmap"
     commands:
       - "cat {{Output}}/ntlm/{{Workspace}}-ntlm-found.json | jq -r '\"nmap -Pn -sT -p\" + .port + \" --script=http-ntlm-info --script-args=http-ntlm-info.root=\\\"\" + (.url | sub(\"^https?://[^/]+\"; \"\")) + \"\\\" \" + .host' | sort -u > {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh"
-      - "chmod +x {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh"
-      - "{{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh >> {{Output}}/ntlm/{{Workspace}}-ntlm-info.txt"
     scripts:
+      - ExecCmd("chmod +x {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh")
+      - ExecCmd("{{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh >> {{Output}}/ntlm/{{Workspace}}-ntlm-info.txt")
       - "Printf('==> Generated Nmap script: {{Output}}/ntlm/{{Workspace}}-ntlm-exec.sh')"
       - "Printf('==> Nmap NTLM Info saved to: {{Output}}/ntlm/{{Workspace}}-ntlm-info.txt')"
 

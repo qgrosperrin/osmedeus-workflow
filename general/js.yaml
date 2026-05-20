@@ -40,25 +40,39 @@ steps:
   - conditions:
       - '"{{skipJsAnalysis}}" == "true"'
     scripts:
-      - ErrPrintf("Filter", "Skipping JS analysis")
+      - Warnf("Skipping JS analysis")
       - Exit(1)
 
-  # 1a. JS URL Discovery: filter .js URLs from spider.yaml's katana output (no re-crawl)
+  # 0. Build in-scope domain pattern file from probing results (single source of truth for scope)
+  - label: "Building in-scope domain patterns from probing results"
+    required:
+      - "{{Binaries}}/unfurl"
+      - "{{httpFile}}"
+    commands:
+      - "cat {{httpFile}} | {{Binaries}}/unfurl format %d 2>/dev/null | grep . | sort -u > {{Output}}/js/domains-{{Workspace}}.txt"
+    scripts:
+      - ExecCmd("sed 's|.*|//&/|' {{Output}}/js/domains-{{Workspace}}.txt > {{Output}}/js/domains-regex-{{Workspace}}.txt")
+      - ExecCmd("sed 's|.*|//&:|' {{Output}}/js/domains-{{Workspace}}.txt >> {{Output}}/js/domains-regex-{{Workspace}}.txt")
+      - "Printf('==> In-scope domain patterns: {{Output}}/js/domains-regex-{{Workspace}}.txt')"
+
+  # 1a. JS URL Discovery: filter .js URLs from spider.yaml's katana output (no re-crawl), scope-filtered
   - label: "Filtering JS URLs from spider crawl output"
     required:
       - "{{spiderLinkFile}}"
+      - "{{Output}}/js/domains-regex-{{Workspace}}.txt"
     commands:
-      - "grep -i '.js' {{spiderLinkFile}} | grep -ivE '.(json|jsp|jspx|jsa|jss)' | sort -u >> {{jsUrlFile}}"
+      - "grep -i '.js' {{spiderLinkFile}} | grep -ivE '.(json|jsp|jspx|jsa|jss)' | grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt | sort -u >> {{jsUrlFile}}"
     scripts:
       - "Printf('==> JS URLs from spider crawl: {{jsUrlFile}}')"
 
-  # 1b. JS URL Discovery: subjs (passive - extracts <script src> tags from HTML, complementary to katana)
+  # 1b. JS URL Discovery: subjs (passive - extracts <script src> tags from HTML, complementary to katana), scope-filtered
   - label: "Discovering additional JS URLs via subjs"
     required:
       - "{{Binaries}}/subjs"
       - "{{httpFile}}"
+      - "{{Output}}/js/domains-regex-{{Workspace}}.txt"
     commands:
-      - "cat {{httpFile}} | {{Binaries}}/subjs -c {{subjsThreads}} | sort -u >> {{jsUrlFile}}"
+      - "cat {{httpFile}} | {{Binaries}}/subjs -c {{subjsThreads}} | grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt | sort -u >> {{jsUrlFile}}"
     scripts:
       - SortU("{{jsUrlFile}}")
       - "Printf('==> JS URLs collected: {{jsUrlFile}}')"
@@ -67,7 +81,7 @@ steps:
   - conditions:
       - "FileLength('{{jsUrlFile}}') <= 0"
     scripts:
-      - ErrPrintf("Filter", "No JS URLs found, skipping JS analysis")
+      - Warnf("No JS URLs found, skipping JS analysis")
       - Exit(1)
 
   # Guard: truncate if too many JS URLs to avoid overload
@@ -92,7 +106,7 @@ steps:
     required:
       - "{{Binaries}}/jsluice"
     commands:
-      - "find {{jsResponseDir}} -type f | xargs -P {{jsluiceThreads}} -I{} {{Binaries}}/jsluice urls {} 2>/dev/null | jq -r '.url // empty' | sort -u >> {{Output}}/js/endpoints-{{Workspace}}.txt"
+      - "find {{jsResponseDir}} -mindepth 2 -type f | xargs -P {{jsluiceThreads}} -I{} bash -c 'domain=$(basename \"$(dirname \"{}\")\"); {{Binaries}}/jsluice urls -R \"https://${domain}/\" \"{}\" 2>/dev/null' | jq -r '.url // empty' | sort -u >> {{Output}}/js/endpoints-{{Workspace}}.txt"
       - "find {{jsResponseDir}} -type f | xargs -P {{jsluiceThreads}} -I{} {{Binaries}}/jsluice secrets {} 2>/dev/null >> {{Output}}/js/secrets-raw-{{Workspace}}.json"
       - "cat {{Output}}/js/secrets-raw-{{Workspace}}.json | jq -r '[.kind, .data.match] | join(\": \")' 2>/dev/null | sort -u >> {{Output}}/js/secrets-{{Workspace}}.txt"
     scripts:
@@ -153,20 +167,16 @@ steps:
       - Cat("{{Output}}/js/nuclei-js-{{Workspace}}.txt")
       - "Printf('==> Nuclei JS findings: {{Output}}/js/nuclei-js-{{Workspace}}.txt')"
 
-  # 8. Fingerprint discovered endpoints
+  # 8. Fingerprint discovered endpoints (scope filtering reuses pattern file built in step 0)
   - label: "Fingerprinting discovered endpoints"
     required:
       - "{{Binaries}}/httpx"
-      - "{{Binaries}}/unfurl"
       - "{{Output}}/js/endpoints-{{Workspace}}.txt"
-    commands:
-      - "cat {{httpFile}} {{jsUrlFile}} 2>/dev/null | {{Binaries}}/unfurl format %d 2>/dev/null | grep . | sort -u > {{Output}}/js/domains-{{Workspace}}.txt"
-      - "sed 's|^|//|; s|$|/|' {{Output}}/js/domains-{{Workspace}}.txt > {{Output}}/js/domains-regex-{{Workspace}}.txt"
-      - "sed 's|^|//|; s|$|:|' {{Output}}/js/domains-{{Workspace}}.txt >> {{Output}}/js/domains-regex-{{Workspace}}.txt"
-      - "grep -E '^https?://' {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' > {{Output}}/js/endpoints-abs-{{Workspace}}.txt || true"
-      - "if [ -s {{Output}}/js/domains-regex-{{Workspace}}.txt ]; then grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt {{Output}}/js/endpoints-abs-{{Workspace}}.txt > {{Output}}/js/endpoints-inscope-{{Workspace}}.txt || true; else echo '[js] domains-regex file empty, fingerprinting all absolute endpoints'; cp {{Output}}/js/endpoints-abs-{{Workspace}}.txt {{Output}}/js/endpoints-inscope-{{Workspace}}.txt; fi"
-      - "cat {{Output}}/js/endpoints-inscope-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt"
+      - "{{Output}}/js/domains-regex-{{Workspace}}.txt"
     scripts:
+      - ExecCmd("grep -E '^https?://' {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' > {{Output}}/js/endpoints-abs-{{Workspace}}.txt || true")
+      - ExecCmd("grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt {{Output}}/js/endpoints-abs-{{Workspace}}.txt > {{Output}}/js/endpoints-inscope-{{Workspace}}.txt || true")
+      - ExecCmd("cat {{Output}}/js/endpoints-inscope-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt")
       - "Printf('==> Endpoint Fingerprints: {{Output}}/js/fingerprint-{{Workspace}}.txt')"
 
   # Summary
