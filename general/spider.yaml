@@ -4,7 +4,6 @@ desc: Crawling links in http site
 report:
   final:
     - "{{Output}}/linkfinding/links-{{Workspace}}.txt"
-    - "{{Output}}/linkfinding/trufflehog-{{Workspace}}-output.txt"
 
 params:
   - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
@@ -17,7 +16,6 @@ params:
   - crawlingTime: "30"
   - skipSpidering: "false"
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-  - trufflehogThreads: "{{ threads * 6}}"
   - httpThreads: "{{ threads * 10}}"
   - dirbFile: "{{Output}}/directory/beautify-{{Workspace}}.csv"
   - dirbSpiderFile: "{{Output}}/linkfinding/dirbscan-urls-{{Workspace}}.txt"
@@ -59,10 +57,9 @@ steps:
     commands:
       - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u >> {{linkFile}}"
 
-  - label: "Analyzing responses and scanning for secrets"
+  - label: "Analyzing responses"
     scripts:
       - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx -silent -t {{httpThreads}} -H '{{defaultUA}}' --store-response-dir {{httpResponse}} -sc -cl -location -title -json > {{Output}}/linkfinding/raw-links.json")
-      - ExecCmd("trufflehog --concurrency={{trufflehogThreads}} filesystem {{httpResponse}} > {{Output}}/linkfinding/trufflehog-{{Workspace}}-output.txt 2>&1")
       - ExecCmd("cat {{Output}}/linkfinding/raw-links.json | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/beautify-{{Workspace}}.csv")
       - ExecCmd("cat {{Output}}/linkfinding/raw-links.json | {{Binaries}}/json-cleaner -f status_code,content_length | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv")
       - ExecCmd("rm -rf {{Output}}/linkfinding/raw-links.json")
@@ -77,3 +74,6 @@ steps:
       - "FileLength('{{linkFile}}') < 10000"
     scripts:
       - Cat("{{linkFile}}")
+
+post_run:
+  - GenMarkdownReport("{{Data}}/markdown/general-template.md", "{{Output}}/summary.html")

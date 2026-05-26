@@ -29,9 +29,9 @@ routines:
       - sto
       - archive
       - ipspace
+      - secrets
   - modules:
       - vulnscan
-  - modules:
       - portscan
   - modules:
       - summary

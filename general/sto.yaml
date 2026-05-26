@@ -6,12 +6,14 @@ report:
     - '{{Output}}/sto/sto-{{Workspace}}-content.txt'
     - '{{Output}}/sto/sto-{{Workspace}}-dns.txt'
     - '{{Output}}/sto/takeoverable-{{Workspace}}.txt'
+    - '{{Output}}/sto/baddns-{{Workspace}}.json'
 
 params:
   - domainFile: "{{Output}}/subdomain/final-{{Workspace}}.txt"
   - httpFile: "{{Output}}/probing/http-{{Workspace}}.txt"
   - dnsFile: "{{Output}}/probing/dns-{{Workspace}}.txt"
   - stoThreads: '{{threads * 8}}'
+  - baddnsThreads: '{{threads * 4}}'
 
 pre_run:
   - CreateFolder("{{Output}}/sto")
@@ -25,9 +27,15 @@ steps:
       - "{{Binaries}}/nuclei -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/dns -l {{domainFile}} | grep -v '[info]' | tee -a {{Output}}/sto/sto-{{Workspace}}-dns.txt"
       - "{{Binaries}}/nuclei -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} | tee -a {{Output}}/sto/sto-{{Workspace}}-content.txt"
 
-  # # grep for cname to pass the internal sto check
-  - scripts:
-      - TeleMessByFile("#sensitive", "{{Output}}/sto/sto-{{Workspace}}-content.txt")
-      - TeleMessByFile("#sensitive", "{{Output}}/sto/sto-{{Workspace}}-dns.txt")
-      - Cat("{{Output}}/sto/sto-{{Workspace}}-content.txt")
-      - Cat("{{Output}}/sto/sto-{{Workspace}}-dns.txt")
+  # baddns - comprehensive DNS takeover and misconfiguration checks
+  - label: "Running baddns subdomain takeover and DNS checks"
+    required:
+      - "baddns"
+      - "{{domainFile}}"
+    source: "{{domainFile}}"
+    threads: '{{baddnsThreads}}'
+    commands:
+      - "baddns [[.line]] --silent 2>/dev/null >> {{Output}}/sto/baddns-{{Workspace}}.json"
+    scripts:
+      - "Printf('==> BadDNS output: {{Output}}/sto/baddns-{{Workspace}}.json')"
+

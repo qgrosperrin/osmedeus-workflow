@@ -9,15 +9,14 @@ usage: |
 routines:
   - modules:
       - ntlm
-  - modules:
       - dirbscan
   - modules:
       - spider
   - modules:
       - js
+      - secrets
   - modules:
       - vulnscan
-  - modules:
       - portscan
   - modules:
       - summary
