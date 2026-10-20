@@ -16,6 +16,8 @@ routines:
       - js
       - secrets
   - modules:
+      - endpoint-mining
+  - modules:
       - vulnscan
       - portscan
   - modules:

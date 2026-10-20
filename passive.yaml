@@ -12,6 +12,8 @@ routines:
   - modules:
       - dns
   - modules:
+      - name-expansion
+  - modules:
       - probing
   - modules:
       - fingerprint
@@ -21,6 +23,7 @@ routines:
       - sto
       - archive
       - ipspace
+      - asset-discovery
   - modules:
       - summary
 
