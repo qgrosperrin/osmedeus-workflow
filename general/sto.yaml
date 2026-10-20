@@ -25,8 +25,8 @@ steps:
       - "{{Binaries}}/nuclei"
       - "{{domainFile}}"
     commands:
-      - "{{Binaries}}/nuclei -ni -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/dns -l {{domainFile}} | grep -v '[info]' | tee -a {{Output}}/sto/sto-{{Workspace}}-dns.txt"
-      - "{{Binaries}}/nuclei -H '{{defaultUA}}' -ni -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} | tee -a {{Output}}/sto/sto-{{Workspace}}-content.txt"
+      - "{{Binaries}}/nuclei -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/dns -l {{domainFile}} | grep -v '[info]' | tee -a {{Output}}/sto/sto-{{Workspace}}-dns.txt"
+      - "{{Binaries}}/nuclei -H '{{defaultUA}}' -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} | tee -a {{Output}}/sto/sto-{{Workspace}}-content.txt"
 
   # baddns - comprehensive DNS takeover and misconfiguration checks
   - label: "Running baddns subdomain takeover and DNS checks"
