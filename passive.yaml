@@ -18,9 +18,6 @@ routines:
       - archive
       - ipspace
       - asset-discovery
-  # name-expansion reads probing's HTTP host list and ipspace's IP space, then
-  # resolves the names it extracts itself. fingerprint runs after it, once,
-  # over the expanded corpus. See docs/adr/0002-certificate-name-ordering.md.
   - modules:
       - name-expansion
   - modules:
