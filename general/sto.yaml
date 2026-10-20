@@ -14,6 +14,7 @@ params:
   - dnsFile: "{{Output}}/probing/dns-{{Workspace}}.txt"
   - stoThreads: '{{threads * 8}}'
   - baddnsThreads: '{{threads * 4}}'
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
 
 pre_run:
   - CreateFolder("{{Output}}/sto")
@@ -25,7 +26,7 @@ steps:
       - "{{domainFile}}"
     commands:
       - "{{Binaries}}/nuclei -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/dns -l {{domainFile}} | grep -v '[info]' | tee -a {{Output}}/sto/sto-{{Workspace}}-dns.txt"
-      - "{{Binaries}}/nuclei -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} | tee -a {{Output}}/sto/sto-{{Workspace}}-content.txt"
+      - "{{Binaries}}/nuclei -H '{{defaultUA}}' -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} | tee -a {{Output}}/sto/sto-{{Workspace}}-content.txt"
 
   # baddns - comprehensive DNS takeover and misconfiguration checks
   - label: "Running baddns subdomain takeover and DNS checks"

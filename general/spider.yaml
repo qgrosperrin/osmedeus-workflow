@@ -15,7 +15,7 @@ params:
   - spiderDepth: "3"
   - crawlingTime: "30"
   - skipSpidering: "false"
-  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
   - httpThreads: "{{ threads * 10}}"
   - dirbFile: "{{Output}}/directory/beautify-{{Workspace}}.csv"
   - dirbSpiderFile: "{{Output}}/linkfinding/dirbscan-urls-{{Workspace}}.txt"
@@ -36,7 +36,7 @@ steps:
     source: "{{httpFile}}"
     threads: '{{spiderPrallel}}'
     commands:
-      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u  >> {{linkFile}}"
+      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -H '{{defaultUA}}' -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u  >> {{linkFile}}"
 
   # 1b. Extract URLs discovered by dirbscan for targeted spidering
   - label: "Preparing dirbscan-discovered URLs for spidering"
@@ -55,7 +55,7 @@ steps:
     source: "{{dirbSpiderFile}}"
     threads: '{{spiderPrallel}}'
     commands:
-      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u >> {{linkFile}}"
+      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -H '{{defaultUA}}' -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u >> {{linkFile}}"
 
   - label: "Analyzing responses"
     scripts:

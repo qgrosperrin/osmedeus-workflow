@@ -16,6 +16,7 @@ pre_run:
 # edit via osmedeus scan -P 'ports=0-65535' -P 'rate=5000' ...
 params:
   - nonCdnFile: "{{Output}}/ipspace/{{Workspace}}-noncdn.txt"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
   # portscan
   - ports: "0-65535"
   - rateRustScan: "{{ threads * 400 }}"
@@ -46,7 +47,7 @@ steps:
       - "{{Binaries}}/httpx"
       - "{{Output}}/portscan/{{Workspace}}-http.txt"
     commands: 
-      - "cat {{Output}}/portscan/{{Workspace}}-http.txt | {{Binaries}}/httpx -t {{screenThreads}} -no-color -silent -screenshot -screenshot-timeout {{screenTimeout}} -json -store-response-dir {{Output}}/portscan/{{Workspace}}-screenshots/ > /dev/null 2>&1"
+      - "cat {{Output}}/portscan/{{Workspace}}-http.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -t {{screenThreads}} -no-color -silent -screenshot -screenshot-timeout {{screenTimeout}} -json -store-response-dir {{Output}}/portscan/{{Workspace}}-screenshots/ > /dev/null 2>&1"
     scripts:
       - ExecCmd("mv {{Output}}/portscan/{{Workspace}}-screenshots/screenshot.html {{Output}}/portscan/{{Workspace}}-screenshots/screenshot-{{Workspace}}.html")
       - ExecCmd("ls {{Output}}/portscan/ > {{Output}}/portscan/number-of-screenshot.txt")

@@ -28,7 +28,8 @@ params:
   - nucleiTimeout: "4h"
   - trufflehogThreads: "{{ threads * 6 }}"
   - skipJsAnalysis: "false"
-  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+  - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
+  - uaValue: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
   - httpTimeout: "10"
   - overviewThreads: "{{ threads * 5 }}"
 
@@ -72,7 +73,7 @@ steps:
       - "{{httpFile}}"
       - "{{Output}}/js/domains-regex-{{Workspace}}.txt"
     commands:
-      - "cat {{httpFile}} | {{Binaries}}/subjs -c {{subjsThreads}} | grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt | sort -u >> {{jsUrlFile}}"
+      - "cat {{httpFile}} | {{Binaries}}/subjs -ua '{{uaValue}}' -c {{subjsThreads}} | grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt | sort -u >> {{jsUrlFile}}"
     scripts:
       - SortU("{{jsUrlFile}}")
       - "Printf('==> JS URLs collected: {{jsUrlFile}}')"
