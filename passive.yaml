@@ -12,18 +12,18 @@ routines:
   - modules:
       - dns
   - modules:
-      - name-expansion
-  - modules:
       - probing
-  - modules:
-      - fingerprint
-  - modules:
-      - screenshot
   - modules:
       - sto
       - archive
       - ipspace
       - asset-discovery
+  - modules:
+      - name-expansion
+  - modules:
+      - fingerprint
+  - modules:
+      - screenshot
   - modules:
       - summary
 
