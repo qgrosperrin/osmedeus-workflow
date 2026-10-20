@@ -40,4 +40,4 @@ steps:
       - "Printf('==> Nmap NTLM Info saved to: {{Output}}/ntlm/{{Workspace}}-ntlm-info.txt')"
 
 post_run:
-  - GenMarkdownReport("{{Data}}/markdown/general-template.md", "{{Output}}/summary.html")
+  - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")

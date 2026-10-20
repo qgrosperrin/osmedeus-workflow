@@ -42,4 +42,4 @@ steps:
 
 post_run:
   - TotalTech("{{Output}}/fingerprint/{{Workspace}}-raw-overview.txt")
-  - GenMarkdownReport("{{Data}}/markdown/general-template.md", "{{Output}}/summary.html")
+  - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")
