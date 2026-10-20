@@ -139,7 +139,7 @@ steps:
   # 6. trufflehog - Deep entropy-based secret scanning over downloaded JS files
   - label: "Deep secret scanning with trufflehog"
     commands:
-      - "trufflehog --concurrency={{trufflehogThreads}} filesystem {{jsResponseDir}} > {{Output}}/js/trufflehog-{{Workspace}}.txt 2>&1"
+      - "trufflehog --no-verification --concurrency={{trufflehogThreads}} filesystem {{jsResponseDir}} > {{Output}}/js/trufflehog-{{Workspace}}.txt 2>&1"
     scripts:
       - "Printf('==> Trufflehog output: {{Output}}/js/trufflehog-{{Workspace}}.txt')"
 
@@ -158,7 +158,7 @@ steps:
       - "{{Binaries}}/nuclei"
       - "{{jsUrlFile}}"
     scripts:
-      - "ExecCmd(\"timeout -k 1m {{nucleiTimeout}} {{Binaries}}/nuclei -H '{{defaultUA}}' -silent -c {{nucleiThreads}} -jsonl -t ~/nuclei-templates/http/exposures/ -t ~/nuclei-templates/http/technologies/ -l {{jsUrlFile}} -o {{Output}}/js/nuclei-js-{{Workspace}}.json 2>/dev/null\")"
+      - "ExecCmd(\"timeout -k 1m {{nucleiTimeout}} {{Binaries}}/nuclei -H '{{defaultUA}}' -ni -silent -c {{nucleiThreads}} -jsonl -t ~/nuclei-templates/http/exposures/ -t ~/nuclei-templates/http/technologies/ -l {{jsUrlFile}} -o {{Output}}/js/nuclei-js-{{Workspace}}.json 2>/dev/null\")"
     pconditions:
       - "FileLength('{{Output}}/js/nuclei-js-{{Workspace}}.json') > 0"
     pscripts:

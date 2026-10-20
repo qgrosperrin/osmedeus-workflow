@@ -38,7 +38,7 @@ steps:
       - "{{Output}}/portscan/open-ports.txt"
       - "{{Output}}/portscan/raw-open-ports.txt"
     commands:
-      - "cat {{Output}}/portscan/open-ports.txt | {{Binaries}}/httprobe -c {{httpThreads}} -t 7000 >> {{Output}}/portscan/{{Workspace}}-http.txt"
+      - "cat {{Output}}/portscan/open-ports.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -no-color -t {{httpThreads}} -timeout 7 >> {{Output}}/portscan/{{Workspace}}-http.txt"
     scripts:
       - SortU('{{Output}}/portscan/{{Workspace}}-http.txt')
 
