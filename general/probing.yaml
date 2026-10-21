@@ -78,6 +78,10 @@ steps:
 
   - commands:
       - "cat {{finalSubdomainFile}} {{permDomainFile}} > {{rawDnsFile}}"
+    # The permutation step multiplies the corpus, and the two steps below
+    # resolve and then probe every name in it. Report the corpus once, here.
+    scripts:
+      - "Printf('[input] probing: ' + FileLength('{{rawDnsFile}}') + ' names to resolve, of which ' + FileLength('{{permDomainFile}}') + ' are permutations')"
   # actually resolving all the DNS
   - required:
       - "{{Binaries}}/puredns"

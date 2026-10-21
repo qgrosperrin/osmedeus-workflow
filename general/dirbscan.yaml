@@ -18,6 +18,9 @@ params:
 
 pre_run:
   - CreateFolder("{{Output}}/directory")
+  # ffuf requests the whole wordlist against every endpoint, so the request
+  # count is the product of these two numbers.
+  - "Printf('[input] dirbscan: ' + FileLength('{{httpFile}}') + ' endpoints x ' + FileLength('{{wordlists}}') + ' wordlist entries')"
 
 steps:
   # check wildcard before brute force dns. We don't want tons of garbage here

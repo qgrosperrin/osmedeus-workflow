@@ -33,6 +33,9 @@ params:
 pre_run:
   - CreateFolder("{{Output}}/vuln")
   - CreateFolder("{{Output}}/vuln/raw")
+  # Every endpoint here is scanned by jaeles and again by the whole nuclei
+  # template set. The step below aborts the Module above {{limit}} endpoints.
+  - "Printf('[input] vulnscan: ' + FileLength('{{httpFile}}') + ' endpoints, abort limit {{limit}}')"
 
 steps:
   # check input file

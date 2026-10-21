@@ -29,6 +29,10 @@ steps:
       - "set -a && source {{providerConfig}} && set +a && cat {{ipFile}} | {{Binaries}}/metabigor ipc --json -o {{Output}}/ipspace/{{Workspace}}-ipspace-summary.txt >/dev/null 2>&1"
     scripts:
       - SortU('{{Output}}/ipspace/{{Workspace}}-range.txt')
+      # asnmap returns every prefix announced by the ASN, not the prefixes the
+      # Target occupies. A Target on a cloud provider yields thousands. Any
+      # Module that reads this file inherits that count, so report it here.
+      - "Printf('[input] ipspace: asnmap returned ' + FileLength('{{Output}}/ipspace/{{Workspace}}-range.txt') + ' prefixes for ' + FileLength('{{ipFile}}') + ' addresses')"
 
   # join results
   - scripts:
