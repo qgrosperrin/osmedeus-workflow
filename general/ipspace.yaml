@@ -5,7 +5,7 @@ report:
   final:
     - "{{Output}}/ipspace/{{Workspace}}-ip.txt"
     - "{{Output}}/ipspace/{{Workspace}}-range.txt"
-    - "{{Workspace}}-ipspace-summary.txt"
+    - "{{Output}}/ipspace/{{Workspace}}-ipspace-summary.txt"
     - "{{Output}}/ipspace/{{Workspace}}-noncdn.txt"
     - "{{Output}}/ipspace/{{Workspace}}-related.txt"
     - "{{Storages}}/summary/{{Workspace}}/ipspace-{{Workspace}}.txt"
@@ -25,8 +25,9 @@ steps:
       - "{{Binaries}}/asnmap"
 
     commands:
-      - "set -a && source {{providerConfig}} && set +a && grep -oE 'AS[0-9]+' {{asnFile}} | sort -u | {{Binaries}}/asnmap -silent -o {{Output}}/ipspace/{{Workspace}}-range.txt"
-      - "set -a && source {{providerConfig}} && set +a && cat {{ipFile}} | {{Binaries}}/metabigor ipc --json -o {{Output}}/ipspace/{{Workspace}}-ipspace-summary.txt >/dev/null 2>&1"
+      - >-
+        set -a && . {{providerConfig}} && set +a && grep -oE 'AS[0-9]+' {{asnFile}} 2>/dev/null | sort -u | {{Binaries}}/asnmap -silent -o {{Output}}/ipspace/{{Workspace}}-range.txt || echo "[!] ipspace: asnmap exited $?; continuing";
+        set -a && . {{providerConfig}} && set +a && cat {{ipFile}} 2>/dev/null | {{Binaries}}/metabigor ipc --json -o {{Output}}/ipspace/{{Workspace}}-ipspace-summary.txt >/dev/null 2>&1 || echo "[!] ipspace: metabigor ipc exited $?; continuing"
     scripts:
       - SortU('{{Output}}/ipspace/{{Workspace}}-range.txt')
       # asnmap returns every prefix announced by the ASN, not the prefixes the
@@ -45,7 +46,7 @@ steps:
       - "{{ipFile}}"
       - "{{Binaries}}/cdnstrip"
     commands:
-      - "cat {{ipFile}} | timeout -k 1m {{ipTimeout}} {{Binaries}}/cdnstrip -cdn {{Output}}/ipspace/{{Workspace}}-cdn.txt -n {{Output}}/ipspace/{{Workspace}}-noncdn.txt"
+      - "cat {{ipFile}} | timeout -k 1m {{ipTimeout}} {{Binaries}}/cdnstrip -cdn {{Output}}/ipspace/{{Workspace}}-cdn.txt -n {{Output}}/ipspace/{{Workspace}}-noncdn.txt || echo \"[!] ipspace: cdnstrip exited $?; continuing\""
 
   # in case strip CDN fail
   - conditions:

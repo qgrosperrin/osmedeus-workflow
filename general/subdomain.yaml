@@ -13,8 +13,9 @@ pre_run:
   - CreateFolder("{{Output}}/ipspace/")
 
 params:
+  - orgName: ""
   - subfinderThreads: "{{threads * 6}}"
-  - amassTimeout: "2h"
+  - amassTimeout: "45m"
   - enableAmass: "true"
   - amassThreads: "200"
   - amassConfig: "{{Data}}/external-configs/amass-basic-config.yaml"
@@ -22,26 +23,36 @@ params:
 
 steps:
   - required:
-      - "{{Binaries}}/amass"
       - "{{Binaries}}/subfinder"
+    commands:
+      - "{{Binaries}}/subfinder -d {{Target}} -provider-config {{subfinderConfig}} -t {{subfinderThreads}} -o {{Output}}/subdomain/{{Workspace}}-subfinder.txt >/dev/null 2>&1 || echo \"[!] subdomain: subfinder exited $?; continuing\""
+
+  - required:
       - "{{Binaries}}/assetfinder"
-      - "{{Binaries}}/github-subdomains"
       - "{{Binaries}}/findomain"
     commands:
-      - "{{Binaries}}/subfinder -d {{Target}} -provider-config {{subfinderConfig}} -t {{subfinderThreads}} -o {{Output}}/subdomain/{{Workspace}}-subfinder.txt >/dev/null 2>&1"
-  - commands:
-      - "{{Binaries}}/assetfinder -subs-only {{Target}} > {{Output}}/subdomain/{{Workspace}}-assetfinder.txt"
-      - "{{Binaries}}/findomain -u {{Output}}/subdomain/{{Workspace}}-findomain.txt -t {{Target}} > /dev/null 2>&1"
+      - >-
+        {{Binaries}}/assetfinder -subs-only {{Target}} > {{Output}}/subdomain/{{Workspace}}-assetfinder.txt 2>/dev/null || echo "[!] subdomain: assetfinder exited $?; continuing";
+        {{Binaries}}/findomain -u {{Output}}/subdomain/{{Workspace}}-findomain.txt -t {{Target}} >/dev/null 2>&1 || echo "[!] subdomain: findomain exited $?; continuing"
 
-  - conditions:
+  - required:
+      - "{{Binaries}}/github-subdomains"
+    commands:
+      - "if [ -n \"$GITHUB_TOKEN\" ]; then {{Binaries}}/github-subdomains -d {{Target}} -o {{Output}}/subdomain/{{Workspace}}-github.txt >/dev/null 2>&1 || echo \"[!] subdomain: github-subdomains exited $?; continuing\"; else touch {{Output}}/subdomain/{{Workspace}}-github.txt; fi"
+
+  - required:
+      - "{{Binaries}}/amass"
+    conditions:
       - '"{{enableAmass}}" == "true"'
     commands:
-      - "timeout -k 1m {{amassTimeout}} {{Binaries}}/amass enum -active -dns-qps {{amassThreads}} -config {{amassConfig}} -silent -nocolor -d {{Target}} -o {{Output}}/subdomain/{{Workspace}}-raw-amass.txt > /dev/null 2>&1"
+      - "timeout -k 1m {{amassTimeout}} {{Binaries}}/amass enum -passive -dns-qps {{amassThreads}} -config {{amassConfig}} -silent -nocolor -d {{Target}} -o {{Output}}/subdomain/{{Workspace}}-raw-amass.txt >/dev/null 2>&1 || echo \"[!] subdomain: amass exited $?; continuing\""
     scripts:
-      - ExecCmd("cat {{Output}}/subdomain/{{Workspace}}-raw-amass.txt | grep 'FQDN' | awk '{print $1}' | sort -u > {{Output}}/subdomain/{{Workspace}}-amass.txt")
+      - ExecCmd("awk '{print $1}' {{Output}}/subdomain/{{Workspace}}-raw-amass.txt 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/\\.$//' | grep -F '.{{Target}}' | sort -u > {{Output}}/subdomain/{{Workspace}}-amass.txt || true")
 
   # cleaning some result
-  - scripts:
+  - required:
+      - "{{Binaries}}/cleansub"
+    scripts:
       - SortU("{{Output}}/subdomain/{{Workspace}}-github.txt")
       - Append("{{Output}}/subdomain/sum-{{Workspace}}.txt", "{{Output}}/subdomain/{{Workspace}}-amass.txt")
       - Append("{{Output}}/subdomain/sum-{{Workspace}}.txt", "{{Output}}/subdomain/{{Workspace}}-subfinder.txt")
@@ -51,15 +62,17 @@ steps:
       - Append("{{Output}}/subdomain/sum-{{Workspace}}.txt", "{{Output}}/subdomain/{{Workspace}}-ourl.txt")
       # append with result in stogres too
       # remove junk subdomain and 1-2-3.subdomain.com
-      - ExecCmd("cat {{Output}}/subdomain/sum-{{Workspace}}.txt | {{Binaries}}/cleansub -t '{{Target}}' >> {{Output}}/subdomain/final-{{Workspace}}.txt")
+      - ExecCmd("cat {{Output}}/subdomain/sum-{{Workspace}}.txt 2>/dev/null | {{Binaries}}/cleansub -t '{{Target}}' >> {{Output}}/subdomain/final-{{Workspace}}.txt")
 
   # get more related domains
   - required:
       - "{{Binaries}}/metabigor"
+      - "{{Binaries}}/cleansub"
     commands:
-      - "echo '{{Org}}' | metabigor cert --json -o {{Output}}/subdomain/more-json-{{Workspace}}.txt > /dev/null 2>&1"
+      - "ORG=$(printf '%s' '{{orgName}}' | tr -d '[:space:]'); case \"$ORG\" in ''|*'{'*|*'<'*) ORG=$(printf '%s' '{{Target}}' | cut -d. -f1);; esac; printf '%s\\n' \"$ORG\" | {{Binaries}}/metabigor cert --json -o {{Output}}/subdomain/more-json-{{Workspace}}.txt >/dev/null 2>&1 || echo \"[!] subdomain: metabigor cert exited $?; continuing\""
     scripts:
-      - ExecCmd("cat {{Output}}/subdomain/more-json-{{Workspace}}.txt | jq -r '.Domain' | sed 's/\*.//g' | sort -u >> {{Output}}/subdomain/more-{{Workspace}}.txt")
+      - ExecCmd("jq -r '.Domain // empty' {{Output}}/subdomain/more-json-{{Workspace}}.txt 2>/dev/null | sed 's/^\\*\\.//g' | sort -u >> {{Output}}/subdomain/more-{{Workspace}}.txt || true")
+      - ExecCmd("cat {{Output}}/subdomain/more-{{Workspace}}.txt 2>/dev/null | {{Binaries}}/cleansub -t '{{Target}}' >> {{Output}}/subdomain/final-{{Workspace}}.txt || true")
 
   - scripts:
       - SortU("{{Output}}/subdomain/final-{{Workspace}}.txt")

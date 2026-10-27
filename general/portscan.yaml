@@ -22,26 +22,29 @@ params:
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
   # portscan
   - ports: "0-65535"
-  - rateRustScan: "{{ threads * 400 }}"
+  - rateRustScan: "{{ threads * 150 }}"
   - httpThreads: "{{ threads * 8 }}"
   - screenThreads: "{{ threads * 2}}"
+  - screenTimeout: "15"
   - skipPortScan: "false"
 
 steps:
   # do port scan first
   - required:
+      - "{{Binaries}}/rustscan"
       - '{{nonCdnFile}}'
     commands:
-      - "{{Binaries}}/rustscan --timeout 3000 -b {{rateRustScan}} --scripts None --range {{ports}} -a {{nonCdnFile}} -g >> {{Output}}/portscan/raw-open-ports.txt"
+      - "{{Binaries}}/rustscan --timeout 3000 --ulimit 5000 -b {{rateRustScan}} --scripts None --range {{ports}} -a {{nonCdnFile}} -g >> {{Output}}/portscan/raw-open-ports.txt || echo \"[!] portscan: rustscan exited $?; continuing\""
     scripts:
       - CleanRustScan("{{Output}}/portscan/raw-open-ports.txt", "{{Output}}/portscan/open-ports.txt")
 
   # detect http running on open ports and service
   - required:
+      - "{{Binaries}}/httpx"
       - "{{Output}}/portscan/open-ports.txt"
       - "{{Output}}/portscan/raw-open-ports.txt"
     commands:
-      - "cat {{Output}}/portscan/open-ports.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -no-color -t {{httpThreads}} -timeout 7 >> {{Output}}/portscan/{{Workspace}}-http.txt"
+      - "cat {{Output}}/portscan/open-ports.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -no-color -t {{httpThreads}} -timeout 7 >> {{Output}}/portscan/{{Workspace}}-http.txt || echo \"[!] portscan: httpx exited $?; continuing\""
     scripts:
       - SortU('{{Output}}/portscan/{{Workspace}}-http.txt')
 
@@ -49,8 +52,8 @@ steps:
   - required:
       - "{{Binaries}}/httpx"
       - "{{Output}}/portscan/{{Workspace}}-http.txt"
-    commands: 
-      - "cat {{Output}}/portscan/{{Workspace}}-http.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -t {{screenThreads}} -no-color -silent -screenshot -screenshot-timeout {{screenTimeout}} -json -store-response-dir {{Output}}/portscan/{{Workspace}}-screenshots/ > /dev/null 2>&1"
+    commands:
+      - "cat {{Output}}/portscan/{{Workspace}}-http.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -t {{screenThreads}} -no-color -silent -screenshot -screenshot-timeout {{screenTimeout}} -json -store-response-dir {{Output}}/portscan/{{Workspace}}-screenshots/ >/dev/null 2>&1 || echo \"[!] portscan: httpx screenshot exited $?; continuing\""
     scripts:
       - ExecCmd("mv {{Output}}/portscan/{{Workspace}}-screenshots/screenshot.html {{Output}}/portscan/{{Workspace}}-screenshots/screenshot-{{Workspace}}.html")
       - ExecCmd("ls {{Output}}/portscan/ > {{Output}}/portscan/number-of-screenshot.txt")

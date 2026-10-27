@@ -19,10 +19,13 @@ params:
 steps:
   - required:
       - "{{Binaries}}/dnsx"
-    
+      - "{{subdomainFile}}"
     commands:
-      - "cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -no-color -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt"
-      - "set -a && source {{providerConfig}} && set +a && cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -no-color -o {{Output}}/dns/dns-asn-{{Workspace}}.txt"
-    
+      - >-
+        cat {{subdomainFile}} | {{Binaries}}/dnsx -silent {{recordTypes}} -resp -no-color -t {{dnsThreads}} -o {{Output}}/dns/dns-records-{{Workspace}}.txt || echo "[!] dns: dnsx records exited $?; continuing";
+        set -a && . {{providerConfig}} && set +a && cat {{subdomainFile}} | {{Binaries}}/dnsx -silent -asn -t {{dnsThreads}} -no-color -o {{Output}}/dns/dns-asn-{{Workspace}}.txt || echo "[!] dns: dnsx asn exited $?; continuing"
     scripts:
-      - ExecCmd("grep -oE 'AS[0-9]+' {{Output}}/dns/dns-asn-{{Workspace}}.txt | sort -u | while read asn; do echo $asn; whois $asn | grep -iE '^(as-name|asname|org-name|orgname|org:|netname|country):' | sort -u; echo '---'; sleep 3; done >> {{Output}}/dns/asn-whois-details-{{Workspace}}.txt")
+      - ExecCmd("grep -oE 'AS[0-9]+' {{Output}}/dns/dns-asn-{{Workspace}}.txt 2>/dev/null | sort -u | while read -r asn; do [ -n \"$asn\" ] || continue; echo \"$asn\"; timeout -k 5 10 whois \"$asn\" 2>/dev/null | grep -iE '^(as-name|asname|org-name|orgname|org:|netname|country):' | sort -u; echo '---'; sleep 1; done >> {{Output}}/dns/asn-whois-details-{{Workspace}}.txt || true")
+
+post_run:
+  - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")

@@ -5,4 +5,4 @@ steps:
   - scripts:
     - ExecCmd("python3 {{Binaries}}/export_to_sqlite.py --output {{Output}} --target {{Target}} --workspace {{Workspace}}")
     - Compress('{{Output}}/{{Workspace}}.tar.gz', '{{Output}}')
-    - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")
+    - ExecCmd("python3 {{Binaries}}/render_report.py --no-sqlite-sync --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")

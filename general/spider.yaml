@@ -17,7 +17,7 @@ params:
   - skipSpidering: "false"
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
   - httpThreads: "{{ threads * 10}}"
-  - dirbFile: "{{Output}}/directory/beautify-{{Workspace}}.csv"
+  - dirbFile: "{{Output}}/directory/unique-beautify-{{Workspace}}.txt"
   - dirbSpiderFile: "{{Output}}/linkfinding/dirbscan-urls-{{Workspace}}.txt"
 
 pre_run:
@@ -36,14 +36,16 @@ steps:
     source: "{{httpFile}}"
     threads: '{{spiderPrallel}}'
     commands:
-      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -H '{{defaultUA}}' -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u  >> {{linkFile}}"
+      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -H '{{defaultUA}}' -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u '[[.line]]' 2>/dev/null | sort -u >> {{linkFile}} || true"
+    scripts:
+      - SortU("{{linkFile}}")
 
   # 1b. Extract URLs discovered by dirbscan for targeted spidering
   - label: "Preparing dirbscan-discovered URLs for spidering"
     conditions:
       - "FileLength('{{dirbFile}}') > 0"
     scripts:
-      - ExecCmd("cut -d',' -f1 {{dirbFile}} | grep -v '^$' | sort -u > {{dirbSpiderFile}}")
+      - ExecCmd("awk -F' \\\\| |,' '{print $1}' {{dirbFile}} 2>/dev/null | grep -E '^https?://' | LC_ALL=C sort -u > {{dirbSpiderFile}}.all && LC_ALL=C sort -u {{httpFile}} 2>/dev/null > {{dirbSpiderFile}}.http && LC_ALL=C comm -23 {{dirbSpiderFile}}.all {{dirbSpiderFile}}.http > {{dirbSpiderFile}} && rm -f {{dirbSpiderFile}}.all {{dirbSpiderFile}}.http || true")
       - "Printf('==> Dirbscan URLs prepared for spidering: {{dirbSpiderFile}}')"
 
   # 1c. Spider from dirbscan-discovered paths (more targeted than root-only crawl)
@@ -55,25 +57,23 @@ steps:
     source: "{{dirbSpiderFile}}"
     threads: '{{spiderPrallel}}'
     commands:
-      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -H '{{defaultUA}}' -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u [[.line]] | sort -u >> {{linkFile}}"
+      - "timeout -k 1m {{spiderTimeout}} {{Binaries}}/katana -H '{{defaultUA}}' -c {{spiderThreads}} -jc -ct {{crawlingTime}} -u '[[.line]]' 2>/dev/null | sort -u >> {{linkFile}} || true"
+    scripts:
+      - SortU("{{linkFile}}")
 
   - label: "Analyzing responses"
+    required:
+      - "{{Binaries}}/httpx"
+      - "{{linkFile}}"
     scripts:
-      - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx -silent -t {{httpThreads}} -H '{{defaultUA}}' --store-response-dir {{httpResponse}} -sc -cl -location -title -json > {{Output}}/linkfinding/raw-links.json")
-      - ExecCmd("cat {{Output}}/linkfinding/raw-links.json | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/beautify-{{Workspace}}.csv")
-      - ExecCmd("cat {{Output}}/linkfinding/raw-links.json | {{Binaries}}/json-cleaner -f status_code,content_length | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv")
+      - SortU("{{linkFile}}")
+      - ExecCmd("cat {{linkFile}} | {{Binaries}}/httpx -silent -t {{httpThreads}} -H '{{defaultUA}}' --store-response-dir {{httpResponse}} -sc -cl -location -title -json > {{Output}}/linkfinding/raw-links.json || echo \"[!] spider: httpx exited $?; continuing\"")
+      - ExecCmd("jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' {{Output}}/linkfinding/raw-links.json 2>/dev/null > {{Output}}/linkfinding/beautify-{{Workspace}}.csv || true")
+      - ExecCmd("jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\" | \")' {{Output}}/linkfinding/raw-links.json 2>/dev/null > {{Output}}/linkfinding/beautify-{{Workspace}}.txt || true")
+      - ExecCmd("cat {{Output}}/linkfinding/raw-links.json 2>/dev/null | {{Binaries}}/json-cleaner -f status_code,content_length | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\",\")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv || true")
+      - ExecCmd("cat {{Output}}/linkfinding/raw-links.json 2>/dev/null | {{Binaries}}/json-cleaner -f status_code,content_length | jq -r '[.url, (.status_code|tostring), (.content_length|tostring), (.location // \"\")] | join(\" | \")' > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt || true")
       - ExecCmd("rm -rf {{Output}}/linkfinding/raw-links.json")
-      # 6. Beautify
-      - ExecCmd("cat {{Output}}/linkfinding/beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/beautify-{{Workspace}}.txt")
-      - ExecCmd("cat {{Output}}/linkfinding/unique-beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
-      - Cat("{{Output}}/linkfinding/unique-beautify-{{Workspace}}.txt")
       - "Printf('==> The unfiltered result can be found at: {{Output}}/linkfinding/beautify-{{Workspace}}.txt')"
-
-  # Print the file if there is not too much data
-  - conditions:
-      - "FileLength('{{linkFile}}') < 10000"
-    scripts:
-      - Cat("{{linkFile}}")
 
 post_run:
   - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")

@@ -18,25 +18,30 @@ params:
 
 pre_run:
   - CreateFolder("{{Output}}/sto")
-  - StartNoti()
 
 steps:
   - required:
       - "{{Binaries}}/nuclei"
       - "{{domainFile}}"
     commands:
-      - "{{Binaries}}/nuclei -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/dns -l {{domainFile}} | grep -v '[info]' | tee -a {{Output}}/sto/sto-{{Workspace}}-dns.txt"
-      - "{{Binaries}}/nuclei -H '{{defaultUA}}' -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} | tee -a {{Output}}/sto/sto-{{Workspace}}-content.txt"
+      - >-
+        {{Binaries}}/nuclei -H '{{defaultUA}}' -no-color -silent -es info -c {{stoThreads}} -t ~/nuclei-templates/dns -l {{domainFile}} -o {{Output}}/sto/sto-{{Workspace}}-dns.txt || echo "[!] sto: nuclei dns exited $?; continuing";
+        if [ -s {{httpFile}} ]; then {{Binaries}}/nuclei -H '{{defaultUA}}' -no-color -silent -c {{stoThreads}} -t ~/nuclei-templates/takeovers -l {{httpFile}} -o {{Output}}/sto/sto-{{Workspace}}-content.txt || echo "[!] sto: nuclei takeovers exited $?; continuing"; fi
 
   # baddns - comprehensive DNS takeover and misconfiguration checks
   - label: "Running baddns subdomain takeover and DNS checks"
     required:
-      - "baddns"
+      - "{{Binaries}}/baddns"
       - "{{domainFile}}"
     source: "{{domainFile}}"
     threads: '{{baddnsThreads}}'
     commands:
-      - "baddns [[.line]] --silent 2>/dev/null >> {{Output}}/sto/baddns-{{Workspace}}.json"
+      - "timeout -k 10 120 {{Binaries}}/baddns '[[.line]]' --silent > {{Output}}/sto/raw-baddns-[[._id_]].json 2>/dev/null || true"
     scripts:
+      - ExecCmd("jq -s '[.[] | if type == \"array\" then .[] else . end]' {{Output}}/sto/raw-baddns-*.json 2>/dev/null > {{Output}}/sto/baddns-{{Workspace}}.json || echo '[]' > {{Output}}/sto/baddns-{{Workspace}}.json")
+      - ExecCmd("rm -f {{Output}}/sto/raw-baddns-*.json")
       - "Printf('==> BadDNS output: {{Output}}/sto/baddns-{{Workspace}}.json')"
+
+post_run:
+  - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")
 

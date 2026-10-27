@@ -36,19 +36,15 @@ steps:
     source: "{{httpFile}}"
     threads: '{{dirbThreads}}'
     commands:
-      - "timeout -k 1m {{ffTimeout}} {{Binaries}}/ffuf -s -t {{ffThreads}} -noninteractive -ac -acs advanced -timeout 15 -se -D -fc '429,404,400' -e 'asp,aspx,aspx~,asp~,py,py~,rb,rb~,php,php~,bak,bkp,cache,cgi,conf,csv,html,inc,js,json,jsp,jsp~,log,old,txt' -json -H '{{defaultUA}}' -u '[[.line]]/FUZZ' -w {{wordlists}}:FUZZ > {{Output}}/directory/raw-[[._id_]].json 2>/dev/null"
+      - "timeout -k 1m {{ffTimeout}} {{Binaries}}/ffuf -s -t {{ffThreads}} -noninteractive -ac -acs advanced -timeout 15 -se -D -fc '429,404,400' -e 'asp,aspx,aspx~,asp~,py,py~,rb,rb~,php,php~,bak,bkp,cache,cgi,conf,csv,html,inc,js,json,jsp,jsp~,log,old,txt' -json -H '{{defaultUA}}' -u '[[.line]]/FUZZ' -w {{wordlists}}:FUZZ > {{Output}}/directory/raw-[[._id_]].json 2>/dev/null || echo \"[!] dirbscan: ffuf exited $? on [[.line]]; continuing\""
   - scripts:
-      - ExecCmd("cat {{Output}}/directory/raw-*.json | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/directory/beautify-{{Workspace}}.csv")
+      - ExecCmd("cat {{Output}}/directory/raw-*.json 2>/dev/null | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),(.redirectlocation // \"\")] | join(\",\")' > {{Output}}/directory/beautify-{{Workspace}}.csv || true")
+      - ExecCmd("cat {{Output}}/directory/raw-*.json 2>/dev/null | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),(.redirectlocation // \"\")] | join(\" | \")' > {{Output}}/directory/beautify-{{Workspace}}.txt || true")
       # doing cleaning for the dirb result
-      - ExecCmd("cat {{Output}}/directory/raw-*.json | {{Binaries}}/json-cleaner -f status,words,lines | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),.redirectlocation] | join(\",\")' > {{Output}}/directory/unique-beautify-{{Workspace}}.csv")
+      - ExecCmd("cat {{Output}}/directory/raw-*.json 2>/dev/null | {{Binaries}}/json-cleaner -f status,words,lines | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),(.redirectlocation // \"\")] | join(\",\")' > {{Output}}/directory/unique-beautify-{{Workspace}}.csv || true")
+      - ExecCmd("cat {{Output}}/directory/raw-*.json 2>/dev/null | {{Binaries}}/json-cleaner -f status,words,lines | jq -r '[.url,(.status|tostring),(.length|tostring),(.words|tostring),(.lines|tostring),(.redirectlocation // \"\")] | join(\" | \")' > {{Output}}/directory/unique-beautify-{{Workspace}}.txt || true")
       - ExecCmd("rm -rf {{Output}}/directory/raw-*.json")
-      # beautify the result
-      - ExecCmd("cat {{Output}}/directory/beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4,5,6 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/directory/beautify-{{Workspace}}.txt")
-      - ExecCmd("cat {{Output}}/directory/unique-beautify-{{Workspace}}.csv | {{Binaries}}/csvtk cut -f 1,2,3,4,5,6 -I | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/directory/unique-beautify-{{Workspace}}.txt")
-      - TeleMessByFile("#dirb", "{{Output}}/directory/unique-beautify-{{Workspace}}.txt")
-      - Cat("{{Output}}/directory/unique-beautify-{{Workspace}}.txt")
       - "Printf('==> The unfiltered result can be found at: {{Output}}/directory/beautify-{{Workspace}}.txt')"
-      - ExecCmd("{{Binaries}}/notify -pc {{Data}}/external-configs/notify-provider.yaml -silent -bulk -data {{Output}}/directory/unique-beautify-{{Workspace}}.txt > /dev/null 2>&1 ")
 
 post_run:
   - TotalDirb("{{Output}}/directory/unique-beautify-{{Workspace}}.txt")

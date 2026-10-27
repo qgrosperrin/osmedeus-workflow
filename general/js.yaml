@@ -26,6 +26,8 @@ params:
   - httpThreads: "{{ threads * 10 }}"
   - nucleiThreads: "{{ threads * 10 }}"
   - nucleiTimeout: "4h"
+  - semgrepTimeout: "30m"
+  - retireTimeout: "15m"
   - trufflehogThreads: "{{ threads * 6 }}"
   - skipJsAnalysis: "false"
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
@@ -98,7 +100,7 @@ steps:
       - "{{Binaries}}/httpx"
       - "{{jsUrlFile}}"
     commands:
-      - "cat {{jsUrlFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -t {{httpThreads}} -store-response-dir {{jsResponseDir}} -mc 200 > /dev/null 2>&1"
+      - "cat {{jsUrlFile}} | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -t {{httpThreads}} -store-response-dir {{jsResponseDir}} -mc 200 >/dev/null 2>&1 || echo \"[!] js: httpx download exited $?; continuing\""
     scripts:
       - "Printf('==> JS files stored at: {{jsResponseDir}}')"
 
@@ -107,10 +109,11 @@ steps:
     required:
       - "{{Binaries}}/jsluice"
     commands:
-      - "find {{jsResponseDir}} -mindepth 2 -type f | xargs -P {{jsluiceThreads}} -I{} bash -c 'domain=$(basename \"$(dirname \"{}\")\"); {{Binaries}}/jsluice urls -R \"https://${domain}/\" \"{}\" 2>/dev/null' | jq -r '.url // empty' | sort -u >> {{Output}}/js/endpoints-{{Workspace}}.txt"
-      - "find {{jsResponseDir}} -type f | xargs -P {{jsluiceThreads}} -I{} {{Binaries}}/jsluice secrets {} 2>/dev/null >> {{Output}}/js/secrets-raw-{{Workspace}}.json"
-      - "cat {{Output}}/js/secrets-raw-{{Workspace}}.json | jq -r '[.kind, .data.match] | join(\": \")' 2>/dev/null | sort -u >> {{Output}}/js/secrets-{{Workspace}}.txt"
+      - >-
+        find {{jsResponseDir}} -mindepth 2 -type f | xargs -P {{jsluiceThreads}} -I{} bash -c 'domain=$(basename "$(dirname "{}")"); {{Binaries}}/jsluice urls -R "https://${domain}/" "{}" 2>/dev/null' | jq -r '.url // empty' 2>/dev/null | sort -u >> {{Output}}/js/endpoints-{{Workspace}}.txt;
+        find {{jsResponseDir}} -type f | xargs -P {{jsluiceThreads}} -I{} {{Binaries}}/jsluice secrets {} 2>/dev/null >> {{Output}}/js/secrets-raw-{{Workspace}}.json
     scripts:
+      - ExecCmd("jq -r '[(.filename // \"\"), .kind, .data.match] | join(\" | \")' {{Output}}/js/secrets-raw-{{Workspace}}.json 2>/dev/null | sort -u >> {{Output}}/js/secrets-{{Workspace}}.txt || true")
       - SortU("{{Output}}/js/endpoints-{{Workspace}}.txt")
       - SortU("{{Output}}/js/secrets-{{Workspace}}.txt")
       - "Printf('==> Endpoints: {{Output}}/js/endpoints-{{Workspace}}.txt')"
@@ -119,27 +122,29 @@ steps:
   # 4. semgrep - Static Application Security Testing on JS files
   - label: "Running semgrep SAST on JS files"
     required:
-      - "semgrep"
+      - "{{Binaries}}/semgrep"
     commands:
-      - "semgrep --config p/javascript --config p/secrets --config p/owasp-top-ten --json --quiet {{jsResponseDir}} > {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null || true"
-      - "jq -r '.results[] | [.check_id, .path, (.start.line|tostring), .extra.message] | join(\" | \")' {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null | sort -u > {{Output}}/js/semgrep-{{Workspace}}.txt || true"
+      - "timeout -k 1m {{semgrepTimeout}} {{Binaries}}/semgrep --config p/javascript --config p/secrets --config p/owasp-top-ten --max-memory 2048 --json --quiet {{jsResponseDir}} > {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null || echo \"[!] js: semgrep exited $?; continuing\""
     scripts:
+      - ExecCmd("jq -r '.results[]? | [.check_id, .path, (.start.line|tostring), .extra.message] | join(\" | \")' {{Output}}/js/semgrep-{{Workspace}}.json 2>/dev/null | sort -u > {{Output}}/js/semgrep-{{Workspace}}.txt || true")
       - "Printf('==> Semgrep findings: {{Output}}/js/semgrep-{{Workspace}}.txt')"
 
   # 5. retire.js - Detect known-vulnerable JS libraries (CVE database)
   - label: "Detecting vulnerable JS libraries with retire.js"
     required:
-      - "retire"
+      - "{{Binaries}}/retire"
     commands:
-      - "retire --js --jspath {{jsResponseDir}} --outputformat json --outputpath {{Output}}/js/retirejs-{{Workspace}}.json --nocache 2>/dev/null || true"
-      - "jq -r '.[] | .file as $f | .results[] | .component as $c | .version as $v | .vulnerabilities[]? | [$c, $v, .severity, (.identifiers.CVE // [\"no-cve\"])[0], $f] | join(\" | \")' {{Output}}/js/retirejs-{{Workspace}}.json 2>/dev/null | sort -u > {{Output}}/js/retirejs-{{Workspace}}.txt || true"
+      - "timeout -k 1m {{retireTimeout}} {{Binaries}}/retire --js --jspath {{jsResponseDir}} --outputformat json --outputpath {{Output}}/js/retirejs-{{Workspace}}.json --nocache 2>/dev/null || echo \"[!] js: retire exited $?; continuing\""
     scripts:
+      - ExecCmd("jq -r '(if type == \"object\" then .data else . end)[]? | .file as $f | .results[]? | .component as $c | .version as $v | .vulnerabilities[]? | [$c, $v, (.severity // \"medium\"), ((.identifiers.CVE // [\"no-cve\"])[0] // \"no-cve\"), $f] | join(\" | \")' {{Output}}/js/retirejs-{{Workspace}}.json 2>/dev/null | sort -u > {{Output}}/js/retirejs-{{Workspace}}.txt || true")
       - "Printf('==> Retire.js findings: {{Output}}/js/retirejs-{{Workspace}}.txt')"
 
   # 6. trufflehog - Deep entropy-based secret scanning over downloaded JS files
   - label: "Deep secret scanning with trufflehog"
+    required:
+      - "{{Binaries}}/trufflehog"
     commands:
-      - "trufflehog --no-verification --concurrency={{trufflehogThreads}} filesystem {{jsResponseDir}} > {{Output}}/js/trufflehog-{{Workspace}}.txt 2>&1"
+      - "{{Binaries}}/trufflehog --no-verification --json --log-level=-1 --concurrency={{trufflehogThreads}} filesystem {{jsResponseDir}} > {{Output}}/js/trufflehog-{{Workspace}}.txt 2>/dev/null || echo \"[!] js: trufflehog exited $?; continuing\""
     scripts:
       - "Printf('==> Trufflehog output: {{Output}}/js/trufflehog-{{Workspace}}.txt')"
 
@@ -148,7 +153,7 @@ steps:
     required:
       - "{{Binaries}}/titus"
     commands:
-      - "{{Binaries}}/titus scan {{jsResponseDir}}; {{Binaries}}/titus report > {{Output}}/js/titus-{{Workspace}}.txt"
+      - "cd {{Output}}/js && {{Binaries}}/titus scan {{jsResponseDir}} && {{Binaries}}/titus report > {{Output}}/js/titus-{{Workspace}}.txt 2>/dev/null || echo \"[!] js: titus exited $?; continuing\""
     scripts:
       - "Printf('==> Titus output: {{Output}}/js/titus-{{Workspace}}.txt')"
 
@@ -158,14 +163,12 @@ steps:
       - "{{Binaries}}/nuclei"
       - "{{jsUrlFile}}"
     scripts:
-      - "ExecCmd(\"timeout -k 1m {{nucleiTimeout}} {{Binaries}}/nuclei -H '{{defaultUA}}' -silent -c {{nucleiThreads}} -jsonl -t ~/nuclei-templates/http/exposures/ -t ~/nuclei-templates/http/technologies/ -l {{jsUrlFile}} -o {{Output}}/js/nuclei-js-{{Workspace}}.json 2>/dev/null\")"
+      - "ExecCmd(\"timeout -k 1m {{nucleiTimeout}} {{Binaries}}/nuclei -H '{{defaultUA}}' -silent -c {{nucleiThreads}} -jsonl -t ~/nuclei-templates/http/exposures/ -t ~/nuclei-templates/http/technologies/ -l {{jsUrlFile}} -o {{Output}}/js/nuclei-js-{{Workspace}}.json 2>/dev/null || echo '[!] js: nuclei exited $?; continuing'\")"
     pconditions:
       - "FileLength('{{Output}}/js/nuclei-js-{{Workspace}}.json') > 0"
     pscripts:
       - ExecCmd("cat {{Output}}/js/nuclei-js-{{Workspace}}.json | jq -r '[.info.severity,.\"template-id\",.\"matched-at\"] | join(\" - \")' > {{Output}}/js/nuclei-js-{{Workspace}}.txt")
       - SortU("{{Output}}/js/nuclei-js-{{Workspace}}.txt")
-      - TeleMessByFile("#sensitive", "{{Output}}/js/nuclei-js-{{Workspace}}.txt")
-      - Cat("{{Output}}/js/nuclei-js-{{Workspace}}.txt")
       - "Printf('==> Nuclei JS findings: {{Output}}/js/nuclei-js-{{Workspace}}.txt')"
 
   # 8. Fingerprint discovered endpoints (scope filtering reuses pattern file built in step 0)
@@ -177,12 +180,11 @@ steps:
     scripts:
       - ExecCmd("grep -E '^https?://' {{Output}}/js/endpoints-{{Workspace}}.txt | grep -ivE '\\.js($|\\?)' > {{Output}}/js/endpoints-abs-{{Workspace}}.txt || true")
       - ExecCmd("grep -F -f {{Output}}/js/domains-regex-{{Workspace}}.txt {{Output}}/js/endpoints-abs-{{Workspace}}.txt > {{Output}}/js/endpoints-inscope-{{Workspace}}.txt || true")
-      - ExecCmd("cat {{Output}}/js/endpoints-inscope-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt")
+      - ExecCmd("cat {{Output}}/js/endpoints-inscope-{{Workspace}}.txt | {{Binaries}}/httpx -H '{{defaultUA}}' -timeout {{httpTimeout}} -t {{overviewThreads}} -no-fallback -no-color -silent -status-code -content-length -title -follow-redirects > {{Output}}/js/fingerprint-{{Workspace}}.txt || true")
       - "Printf('==> Endpoint Fingerprints: {{Output}}/js/fingerprint-{{Workspace}}.txt')"
 
   # Summary
   - scripts:
-      - Cat("{{Output}}/js/endpoints-{{Workspace}}.txt")
       - "Printf('==> JS Analysis complete. All results in {{Output}}/js/')"
 
 post_run:

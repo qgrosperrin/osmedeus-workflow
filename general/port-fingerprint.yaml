@@ -20,13 +20,13 @@ steps:
       - "{{Output}}/portscan/open-ports.txt"
       - "{{Output}}/portscan/raw-open-ports.txt"
     commands:
-      - "cat {{Output}}/portscan/raw-open-ports.txt | {{Binaries}}/metabigor scan -c {{nmapThreads}} -R --tmp {{Output}}/portscan/nmap-raw/ -o {{Output}}/portscan/{{Workspace}}-detail.txt"
-      - "cat {{Output}}/portscan/open-ports.txt | {{Binaries}}/httpx -nf -timeout {{httpTimeout}} -t {{httpThreads}} -no-color -json -title -tech-detect -status-code -silent >> {{Output}}/portscan/{{Workspace}}-http-overview.txt"
+      - >-
+        cat {{Output}}/portscan/raw-open-ports.txt | {{Binaries}}/metabigor scan -c {{nmapThreads}} -R --tmp {{Output}}/portscan/nmap-raw/ -o {{Output}}/portscan/{{Workspace}}-detail.txt || true;
+        cat {{Output}}/portscan/open-ports.txt | {{Binaries}}/httpx -nf -timeout {{httpTimeout}} -t {{httpThreads}} -no-color -json -title -tech-detect -status-code -silent >> {{Output}}/portscan/{{Workspace}}-http-overview.txt || true
     scripts:
-      - ExecCmd("cat {{Output}}/portscan/nmap-raw/*.nmap > {{Output}}/portscan/nmap-raw-{{Workspace}}.txt")
+      - ExecCmd("cat {{Output}}/portscan/nmap-raw/*.nmap 2>/dev/null > {{Output}}/portscan/nmap-raw-{{Workspace}}.txt || true")
       - CleanJSONHttpx('{{Output}}/portscan/{{Workspace}}-http-overview.txt', '{{Output}}/portscan/{{Workspace}}-raw-overview.txt')
-      - ExecCmd("cat {{Output}}/portscan/{{Workspace}}-raw-overview.txt | csvtk pretty --no-header-row -I -s ' | ' -W 75 > {{Output}}/portscan/beautify-{{Workspace}}-http.txt")
-      - Cat('{{Output}}/portscan/beautify-{{Workspace}}-http.txt')
+      - ExecCmd("cat {{Output}}/portscan/{{Workspace}}-raw-overview.txt 2>/dev/null | {{Binaries}}/csvtk pretty --no-header-row -I -s ' | ' > {{Output}}/portscan/beautify-{{Workspace}}-http.txt || true")
 
   # backup the open ports
   - scripts:

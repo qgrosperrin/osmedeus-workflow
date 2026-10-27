@@ -32,6 +32,8 @@ params:
   - httpThreads: "{{ threads * 8 }}"
   - dnsxThreads: "{{ threads * 8 }}"
   - wildcardTests: "{{ threads * 3 }}"
+  - purednsTimeout: "60m"
+  - httpxTimeout: "30m"
   - defaultUA: "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36"
 
 steps:
@@ -39,8 +41,7 @@ steps:
   - conditions:
       - "FileLength('{{dnsFile}}') > 0"
     commands:
-      - cp {{dnsFile}} {{Output}}/probing/bak-dns-{{Workspace}}.txt
-      - cp {{httpFile}} {{Output}}/probing/bak-http-{{Workspace}}.txt
+      - "cp {{dnsFile}} {{Output}}/probing/bak-dns-{{Workspace}}.txt && cp {{httpFile}} {{Output}}/probing/bak-http-{{Workspace}}.txt"
     scripts:
       # joining the old subdomains with a new one too
       - ExecCmd("cat {{Output}}/probing/subbrute-{{Workspace}}.txt >> {{finalSubdomainFile}}")
@@ -49,8 +50,7 @@ steps:
   ##### DNS Brute Forcing
   # build the custom wordlists based on the subdomain file
   - commands:
-      - "cat {{finalSubdomainFile}} | {{Binaries}}/str-replace -d '.' -n | sort -u >> {{customDnsWordlist}}"
-      - 'cat {{bruteWordlist}} >> {{customDnsWordlist}}'
+      - "cat {{finalSubdomainFile}} | {{Binaries}}/str-replace -d '.' -n | sort -u >> {{customDnsWordlist}}; cat {{bruteWordlist}} >> {{customDnsWordlist}}"
     scripts:
       - "SortU('{{customDnsWordlist}}')"
   # simple bruteforce with main domain
@@ -60,7 +60,7 @@ steps:
       - "{{Binaries}}/puredns"
       - "{{Binaries}}/massdns"
     commands:
-      - '{{Binaries}}/puredns bruteforce {{customDnsWordlist}} {{Target}} -r {{resolvers}} --wildcard-tests {{wildcardTests}} -w {{Output}}/probing/subbrute-{{Workspace}}.txt --resolvers-trusted {{trustedResolvers}} --rate-limit-trusted {{massdnsRateBrute}} --bin {{Binaries}}/massdns >/dev/null 2>&1'
+      - 'timeout -k 1m {{purednsTimeout}} {{Binaries}}/puredns bruteforce {{customDnsWordlist}} {{Target}} -r {{resolvers}} --wildcard-tests {{wildcardTests}} -w {{Output}}/probing/subbrute-{{Workspace}}.txt --resolvers-trusted {{trustedResolvers}} --rate-limit-trusted {{massdnsRateBrute}} --bin {{Binaries}}/massdns >/dev/null 2>&1 || echo "[!] probing: puredns bruteforce exited $?; continuing"'
     scripts:
       - ExecCmd("cat {{Output}}/probing/subbrute-{{Workspace}}.txt >> {{finalSubdomainFile}}")
       - SortU("{{finalSubdomainFile}}")
@@ -88,23 +88,25 @@ steps:
       - "{{Binaries}}/massdns"
       - "{{rawDnsFile}}"
     commands:
-      - "{{Binaries}}/puredns resolve {{rawDnsFile}} -r {{resolvers}} --write {{Output}}/probing/nonwild-{{Workspace}}.txt --write-massdns {{dnsFile}} --write-wildcards {{Output}}/probing/wildcards-{{Workspace}}.txt --wildcard-tests {{wildcardTests}} --resolvers-trusted {{trustedResolvers}} --rate-limit-trusted {{massdnsRateBrute}} --bin {{Binaries}}/massdns >/dev/null 2>&1"
+      - "timeout -k 1m {{purednsTimeout}} {{Binaries}}/puredns resolve {{rawDnsFile}} -r {{resolvers}} --write {{Output}}/probing/nonwild-{{Workspace}}.txt --write-massdns {{dnsFile}} --write-wildcards {{Output}}/probing/wildcards-{{Workspace}}.txt --wildcard-tests {{wildcardTests}} --resolvers-trusted {{trustedResolvers}} --rate-limit-trusted {{massdnsRateBrute}} --bin {{Binaries}}/massdns >/dev/null 2>&1 || echo \"[!] probing: puredns resolve exited $?; continuing\""
     scripts:
       - "SortU('{{dnsFile}}')"
+      - ExecCmd("cat {{Output}}/probing/nonwild-{{Workspace}}.txt 2>/dev/null >> {{finalSubdomainFile}}")
+      - SortU("{{finalSubdomainFile}}")
 
   # in case we have no DNS result
   - conditions:
       - "FileLength('{{dnsFile}}') < 1"
     commands:
-      - "cat {{rawDnsFile}} | {{Binaries}}/dnsx -silent -a -cname -resp-only -json -r {{resolvers}} -t {{httpThreads}} > {{Output}}/probing/raw-dnsx-{{Workspace}}.txt"
+      - "cat {{rawDnsFile}} | {{Binaries}}/dnsx -silent -a -cname -resp-only -json -r {{resolvers}} -t {{httpThreads}} > {{Output}}/probing/raw-dnsx-{{Workspace}}.txt || echo \"[!] probing: dnsx fallback exited $?; continuing\""
     scripts:
-      - "CleanJSONDnsx('raw-dnsx-{{Workspace}}.txt', '{{dnsFile}}')"
+      - "CleanJSONDnsx('{{Output}}/probing/raw-dnsx-{{Workspace}}.txt', '{{dnsFile}}')"
 
   # probing for http
   - required:
       - "{{Binaries}}/httpx"
     commands:
-      - "cat {{rawDnsFile}} {{finalSubdomainFile}} | sort -u | {{Binaries}}/httpx -H '{{defaultUA}}' -p 66,80,81,443,445,457,1080,1100,1241,1352,1433,1434,1521,1944,2301,3000,3128,3306,4000,4001,4002,4100,5000,5432,5800,5801,5802,6346,6347,7001,7002,8000,8080,8081,8443,8888,30821 -silent -t {{httpThreads}} >> {{httpFile}}"
+      - "cat {{dnsFile}} {{Output}}/probing/nonwild-{{Workspace}}.txt 2>/dev/null | awk '{print $1}' | sed 's/\\.$//' | sort -u | timeout -k 1m {{httpxTimeout}} {{Binaries}}/httpx -H '{{defaultUA}}' -p 66,80,81,443,445,457,1080,1100,1241,1352,1433,1434,1521,1944,2301,3000,3128,3306,4000,4001,4002,4100,5000,5432,5800,5801,5802,6346,6347,7001,7002,8000,8080,8081,8443,8888,30821 -silent -t {{httpThreads}} >> {{httpFile}} || echo \"[!] probing: httpx exited $?; continuing\""
     scripts:
       - "SortU('{{httpFile}}')"
       - "ExecCmd('rm -rf {{rawDnsFile}} {{customDnsWordlist}} {{permDomainFile}}')"
@@ -115,7 +117,8 @@ steps:
     scripts:
       - Warnf('HTTP File {{httpFile}} is too big and excess the limit {{wildcardLimit}}. Filtering it...')
       - ExecCmd("rm -rf {{httpFile}}")
-      - ExecCmd("cat {{dnsFile}} | grep '{{Target}}' | awk '{print $1}' | sed 's/\.$//g' | sort -u | {{Binaries}}/httpx -H '{{defaultUA}}' -silent -no-color -t {{httpThreads}} >> {{httpFile}}")
+      - ExecCmd("awk -v t='{{Target}}' -v d='.{{Target}}' '{ h=tolower($1); sub(/\\.$/, \"\", h); if (h == t || (length(h) > length(d) && substr(h, length(h)-length(d)+1) == d)) print h }' {{dnsFile}} | sort -u | head -n {{wildcardLimit}} | timeout -k 1m {{httpxTimeout}} {{Binaries}}/httpx -H '{{defaultUA}}' -p 80,443,8080,8443 -silent -no-color -t {{httpThreads}} >> {{httpFile}} || true")
+      - SortU("{{httpFile}}")
 
   # get IP Address for later modules
   - required:
@@ -146,3 +149,6 @@ steps:
     scripts:
       - TotalSubdomain('{{httpFile}}')
       - TotalDns('{{dnsFile}}')
+
+post_run:
+  - ExecCmd("python3 {{Binaries}}/render_report.py --template {{Data}}/markdown/general-template.md --output {{Output}} --workspace {{Workspace}} --html {{Output}}/summary.html")
